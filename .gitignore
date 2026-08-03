@@ -1,0 +1,11 @@
+# macOS 系统文件
+.DS_Store
+
+# AI 助手本地记忆/规则，不入库
+.joycode/
+
+# 临时校验脚本
+UI2Code/_check.py
+
+# 无用副本文件
+参考文件/index_副本.html

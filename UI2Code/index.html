@@ -1,0 +1,2158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JoyInside 运营平台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #333; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    .hidden-page { display: none !important; }
+    /* 抽屉右滑动画 */
+    @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+    .drawer-panel { animation: slideIn .22s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .mask-fade { animation: fadeIn .2s ease-out; }
+    /* Toast */
+    @keyframes toastIn { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    .toast-anim { animation: toastIn .2s ease-out; }
+    .switch { width:44px; height:24px; border-radius:12px; background:#d9d9d9; position:relative; cursor:pointer; transition:background .2s; flex-shrink:0; }
+    .switch.on { background:#1473e6; }
+    .switch .knob { position:absolute; top:2px; left:2px; width:20px; height:20px; background:#fff; border-radius:50%; transition:transform .2s; }
+    .switch.on .knob { transform:translateX(20px); }
+  </style>
+</head>
+<body class="bg-[#f4f5f7]">
+  <div id="app" class="w-full mx-auto min-h-[1024px] bg-[#f4f5f7]"></div>
+
+  <!-- 弹窗/抽屉挂载点 -->
+  <div id="overlay-root"></div>
+  <!-- Toast 挂载点 -->
+  <div id="toast-root"></div>
+
+  <script>
+  /* =========================================================
+   * 全局状态与路由
+   * ========================================================= */
+  const State = {
+    currentPage: 'index',
+    currentAppData: null,   // 进入配置页携带的产品数据
+    currentAppVersion: 'standard',
+  };
+
+  function setCurrentPage(key) {
+    if (!key) return;
+    State.currentPage = key;
+    renderApp();
+  }
+  window.__setCurrentPage = setCurrentPage;
+
+  /* ---------- Toast ---------- */
+  function showToast(text, duration = 1800) {
+    const root = document.getElementById('toast-root');
+    const el = document.createElement('div');
+    el.className = 'toast-anim fixed top-[80px] left-1/2 -translate-x-1/2 z-[200] bg-[#333] text-white text-[14px] px-[20px] py-[10px] rounded-[6px] shadow-lg';
+    el.textContent = text;
+    root.appendChild(el);
+    setTimeout(() => el.remove(), duration);
+  }
+
+  /* ---------- Switch 组件 ---------- */
+  function switchHtml(id, checked) {
+    return `<div class="switch ${checked ? 'on' : ''}" data-switch="${id}"><div class="knob"></div></div>`;
+  }
+  // 事件委托：点击 switch 切换
+  document.addEventListener('click', (e) => {
+    const sw = e.target.closest('[data-switch]');
+    if (sw && !sw.hasAttribute('data-controlled')) {
+      const id = sw.getAttribute('data-switch') || '';
+      // appConfig 的联动开关由其自身委托 renderApp 处理，此处不自动 toggle 以免冲突
+      if (id.indexOf('ac-') === 0) return;
+      sw.classList.toggle('on');
+    }
+  });
+
+  /* ---------- 侧边栏 Layout ---------- */
+  function layoutHtml(activeMenu, isResourceOpen, contentHtml) {
+    const menuItem = (name, icon, label, page) => {
+      const active = activeMenu === name;
+      return `<div class="flex items-center px-[12px] py-[10px] text-[14px] cursor-pointer rounded-[4px] ${active ? 'text-[#1473e6] bg-[#eef5fd] font-medium' : 'hover:bg-[#f5f5f5]'}" data-nav="${page || ''}" data-menu="${name}">
+        <i class="fas ${icon} w-[20px] text-center mr-[8px]"></i> ${label}
+      </div>`;
+    };
+    const subs = ['知识库','技能库','MCP服务','指令库','音色库','型号库'];
+    const subPageMap = { 'MCP服务':'mcpService','指令库':'instructionLibrary','型号库':'modelLibrary' };
+    const subHtml = subs.map(sub => {
+      const active = activeMenu === `资源管理-${sub}`;
+      return `<div class="text-[14px] cursor-pointer ${active ? 'text-[#1473e6] font-medium' : 'text-[#666] hover:text-[#1473e6]'}" data-nav="${subPageMap[sub]||''}" data-menu="资源管理-${sub}">${sub}</div>`;
+    }).join('');
+    const resourceActive = activeMenu.startsWith('资源管理');
+    return `
+    <div class="flex h-screen w-full bg-[#f4f5f7] font-sans text-[#333]">
+      <aside class="w-[240px] bg-white border-r border-[#e5e5e5] flex flex-col">
+        <div class="h-[60px] flex items-center px-[24px] border-b border-[#e5e5e5]">
+          <span class="text-[20px] font-bold text-[#1473e6]">JoyInside</span>
+          <span class="ml-[8px] bg-[#1473e6] text-white text-[12px] px-[6px] py-[2px] rounded-[4px]">内测版</span>
+        </div>
+        <div class="p-[16px]">
+          <div class="flex items-center justify-between p-[8px] bg-[#f5f5f5] rounded-[4px] cursor-pointer mb-[16px]">
+            <span class="text-[14px]">苏大强</span>
+            <i class="fas fa-chevron-down text-[12px] text-[#666]"></i>
+          </div>
+          <nav class="space-y-[4px]">
+            ${menuItem('首页','fa-home','首页','index')}
+            ${menuItem('产品管理','fa-th-large','产品管理','index')}
+            <div class="flex items-center justify-between px-[12px] py-[10px] text-[14px] cursor-pointer rounded-[4px] ${resourceActive ? 'text-[#1473e6] bg-[#eef5fd] font-medium' : 'hover:bg-[#f5f5f5]'}" data-toggle-resource="1">
+              <div class="flex items-center"><i class="fas fa-folder-open w-[20px] text-center mr-[8px]"></i> 资源管理</div>
+              <i class="fas fa-chevron-${isResourceOpen ? 'up':'down'} text-[12px] text-[#666]"></i>
+            </div>
+            ${isResourceOpen ? `<div class="pl-[40px] py-[4px] space-y-[8px]">${subHtml}</div>` : ''}
+            ${menuItem('设备管理','fa-microchip','设备管理','deviceManage')}
+            <div class="flex items-center justify-between px-[12px] py-[10px] text-[14px] cursor-pointer rounded-[4px] hover:bg-[#f5f5f5]">
+              <div class="flex items-center"><i class="fas fa-code w-[20px] text-center mr-[8px]"></i> 开发者中心</div>
+              <i class="fas fa-chevron-down text-[12px] text-[#666]"></i>
+            </div>
+          </nav>
+        </div>
+        <div class="mt-auto p-[16px] border-t border-[#e5e5e5]">
+          <div class="flex items-center px-[12px] py-[10px] text-[14px] cursor-pointer hover:bg-[#f5f5f5] rounded-[4px]">
+            <i class="far fa-user w-[20px] text-center mr-[8px]"></i> 个人信息
+          </div>
+        </div>
+      </aside>
+      <main class="flex-1 flex flex-col overflow-hidden">${contentHtml}</main>
+    </div>`;
+  }
+
+  function activeMenuForPage(page) {
+    if (page === 'mcpService') return '资源管理-MCP服务';
+    if (page === 'instructionLibrary') return '资源管理-指令库';
+    if (page === 'modelLibrary') return '资源管理-型号库';
+    if (page === 'deviceManage') return '设备管理';
+    if (page === 'appConfig') return '产品管理';
+    return '产品管理';
+  }
+  function isResourcePage(page) {
+    return ['mcpService','instructionLibrary','modelLibrary'].includes(page);
+  }
+
+  /* ---------- 页面渲染分发 ---------- */
+  let resourceMenuOpen = false;
+  function renderApp() {
+    const page = State.currentPage;
+    if (isResourcePage(page)) resourceMenuOpen = true;
+    const prevScroll = (function(){ const el=document.getElementById('ac-scroll'); return el?el.scrollTop:0; })();
+    const contentHtml = renderPageContent(page);
+    const html = layoutHtml(activeMenuForPage(page), resourceMenuOpen || isResourcePage(page), contentHtml);
+    document.getElementById('app').innerHTML = html;
+    bindPageEvents(page);
+    const sc = document.getElementById('ac-scroll');
+    if (sc && prevScroll) sc.scrollTop = prevScroll;
+  }
+
+  // 侧边栏导航事件委托
+  document.addEventListener('click', (e) => {
+    const nav = e.target.closest('[data-nav]');
+    if (nav) {
+      const page = nav.getAttribute('data-nav');
+      if (page) { setCurrentPage(page); return; }
+    }
+    const toggle = e.target.closest('[data-toggle-resource]');
+    if (toggle) { resourceMenuOpen = !resourceMenuOpen; renderApp(); }
+  });
+
+  // 占位：页面内容渲染（后续注入）
+  function renderPageContent(page) {
+    if (window.Pages && window.Pages[page]) return window.Pages[page]();
+    return `<div class="p-[40px] text-[#999]">页面 ${page} 建设中…</div>`;
+  }
+  function bindPageEvents(page) {
+    if (window.PageEvents && window.PageEvents[page]) window.PageEvents[page]();
+  }
+
+  window.Pages = {};
+  window.PageEvents = {};
+  window.App = { State, setCurrentPage, showToast, switchHtml, renderApp, renderPageContent };
+  </script>
+
+  <!-- ============ 通用抽屉 / 弹窗 辅助 ============ -->
+  <script>
+  const Overlay = document.getElementById('overlay-root');
+  // 打开抽屉：右侧滑入。widthClass 控制宽度
+  function openDrawer(innerHtml, opts = {}) {
+    const width = opts.widthClass || 'w-[600px]';
+    const wrap = document.createElement('div');
+    wrap.className = 'fixed inset-0 z-50 flex justify-end';
+    wrap.innerHTML = `
+      <div class="absolute inset-0 mask-fade" style="background:rgba(0,0,0,0.25)" data-mask></div>
+      <div class="drawer-panel relative ${width} h-full bg-white shadow-2xl">${innerHtml}</div>`;
+    Overlay.appendChild(wrap);
+    wrap.addEventListener('click', (e) => { if (!opts.noMaskClose && e.target && e.target.hasAttribute && e.target.hasAttribute('data-mask')) wrap.remove(); });
+    if (opts.onMount) opts.onMount(wrap);
+    return wrap;
+  }
+  // 打开居中弹窗
+  function openModal(innerHtml, opts = {}) {
+    const wrap = document.createElement('div');
+    wrap.className = `fixed inset-0 z-[100] flex items-center justify-center ${opts.zClass||''}`;
+    wrap.innerHTML = `
+      <div class="absolute inset-0 mask-fade" style="background:rgba(0,0,0,0.45)" data-mask></div>
+      <div class="relative">${innerHtml}</div>`;
+    Overlay.appendChild(wrap);
+    wrap.addEventListener('click', (e) => { if (!opts.noMaskClose && e.target && e.target.hasAttribute && e.target.hasAttribute('data-mask')) wrap.remove(); });
+    if (opts.onMount) opts.onMount(wrap);
+    return wrap;
+  }
+  function closeOverlay(el) { const w = el.closest('.fixed.inset-0'); if (w) w.remove(); }
+
+  // 通用确认弹窗
+  function confirmModal({ title, content, hint, onConfirm }) {
+    const html = `
+      <div class="w-[420px] bg-white rounded-[8px] shadow-xl overflow-hidden">
+        <div class="px-[24px] pt-[24px] pb-[8px] flex items-start">
+          <i class="fas fa-exclamation-circle text-[#faad14] text-[22px] mr-[12px] mt-[2px]"></i>
+          <div>
+            <h3 class="text-[16px] font-medium text-[#333]">${title||'提示'}</h3>
+            <p class="text-[14px] text-[#666] mt-[8px]">${content||''}</p>
+            ${hint ? `<p class="text-[13px] text-[#999] mt-[6px]">${hint}</p>` : ''}
+          </div>
+        </div>
+        <div class="px-[24px] py-[16px] flex justify-end">
+          <button data-cancel class="h-[34px] px-[18px] border border-[#d9d9d9] rounded-[4px] text-[14px] text-[#333] mr-[12px] hover:bg-[#f5f5f5]">取消</button>
+          <button data-ok class="h-[34px] px-[18px] bg-[#1473e6] text-white rounded-[4px] text-[14px] hover:bg-[#1266d1]">确定</button>
+        </div>
+      </div>`;
+    const wrap = openModal(html, { zClass: 'z-[110]' });
+    wrap.querySelector('[data-cancel]').addEventListener('click', () => wrap.remove());
+    wrap.querySelector('[data-ok]').addEventListener('click', () => { wrap.remove(); onConfirm && onConfirm(); });
+  }
+
+  window.App.openDrawer = openDrawer;
+  window.App.openModal = openModal;
+  window.App.closeOverlay = closeOverlay;
+  window.App.confirmModal = confirmModal;
+  </script>
+
+  <!-- ============ 产品管理页 IndexPage ============ -->
+  <script>
+  const Products = {
+    list: [
+      { id:'11664', name:'测试1', voice:'美声-男声', date:'2026-06-24 14:48', author:'jd_cVqWlSefhCQV', productVersion:'standard', productType:'KJ-350', productCategory:'空气净化器', productPart:'后背', iotPlatform:'小家', typeDesc:'标准型空气净化设备', devBoardId:'-', devBoardType:'-', serialPrefix:'TCLS_KEVINBOX2__', desc:'12345' },
+      { id:'11566', name:'609平台学习', voice:'秦彻 (测试)', date:'2026-06-09 14:56', author:'jd_cVqWlSefhCQV', productVersion:'lite', productType:'609-Lite', productCategory:'', productPart:'', iotPlatform:'', typeDesc:'', devBoardId:'kevin-box-lite', devBoardType:'-', serialPrefix:'TCLS_609LITE___', desc:'609平台学习设备' },
+      { id:'11701', name:'端侧设备测试', voice:'美声-男声', date:'2026-08-03 10:00', author:'jd_cVqWlSefhCQV', productVersion:'standard', productType:'端侧-型号', productCategory:'', productPart:'', iotPlatform:'', typeDesc:'', devBoardId:'-', devBoardType:'-', serialPrefix:'-', desc:'端侧设备测试产品' },
+      { id:'11702', name:'集贤产品测试', voice:'美声-男声', date:'2026-08-03 10:05', author:'jd_cVqWlSefhCQV', productVersion:'standard', productType:'集贤-型号', productCategory:'', productPart:'', iotPlatform:'集贤', typeDesc:'', devBoardId:'-', devBoardType:'-', serialPrefix:'-', desc:'集贤产品测试产品' }
+    ]
+  };
+
+  function appCardHtml(data, idx) {
+    const badge = data.productVersion === 'lite'
+      ? '<span class="ml-[8px] text-[12px] px-[6px] py-[2px] rounded-[4px] bg-[#e6f7ff] text-[#1890ff] border border-[#91d5ff]">Lite版</span>'
+      : (data.productVersion === 'standard' ? '<span class="ml-[8px] text-[12px] px-[6px] py-[2px] rounded-[4px] bg-[#f6ffed] text-[#52c41a] border border-[#b7eb8f]">标准版</span>' : '');
+    const iotRow = data.productVersion === 'standard' ? `<span>IoT平台：${data.iotPlatform || '端侧设备'}</span>` : '<span></span>';
+    return `
+    <div class="bg-white rounded-[8px] p-[20px] shadow-sm border border-[#e5e5e5] relative hover:shadow-md transition-shadow cursor-pointer" data-card-config="${idx}">
+      <div class="flex justify-between items-start mb-[40px]">
+        <div class="flex items-center">
+          <h3 class="text-[16px] font-medium text-[#333]">${data.name}</h3>${badge}
+        </div>
+        <button class="text-[#999] hover:text-[#333] px-[4px]" data-card-menu="${idx}"><i class="fas fa-ellipsis-h"></i></button>
+        <div class="hidden absolute right-[20px] top-[40px] bg-white border border-[#e5e5e5] rounded-[4px] shadow-lg w-[120px] py-[8px] z-10" data-card-dropdown="${idx}">
+          <div class="px-[16px] py-[8px] text-[14px] hover:bg-[#f5f5f5] cursor-pointer" data-card-edit="${idx}">编辑产品</div>
+          <div class="px-[16px] py-[8px] text-[14px] hover:bg-[#f5f5f5] cursor-pointer" data-card-device="${idx}">设备管理</div>
+          <div class="px-[16px] py-[8px] text-[14px] text-[#e1251b] hover:bg-[#f5f5f5] cursor-pointer" data-card-delete="${idx}">删除产品</div>
+        </div>
+      </div>
+      <div class="flex justify-between items-center text-[12px] text-[#666] mb-[12px]"><span>APPID ${data.id}</span>${iotRow}</div>
+      <div class="flex justify-between items-center text-[12px] text-[#999]">
+        <span>${data.date}</span>
+        <span class="flex items-center"><i class="far fa-user mr-[4px]"></i> ${data.author}</span>
+      </div>
+    </div>`;
+  }
+
+  window.Pages.index = function() {
+    const cards = Products.list.map((d,i)=>appCardHtml(d,i)).join('');
+    return `
+    <div class="flex flex-col h-full bg-[#f4f5f7]">
+      <div class="px-[24px] py-[16px] bg-white border-b border-[#e5e5e5] flex items-center justify-between" style="height:60px">
+  <div>
+          <h1 class="text-[20px] font-bold text-[#333] mb-[4px]">产品管理</h1>
+          <p class="text-[14px] text-[#999]">产品能够决定设备拥有什么样的能力，一个产品可以绑定多个设备。</p>
+        </div>
+        <div class="flex items-center space-x-[16px]">
+          <div class="relative w-[280px]">
+            <input type="text" placeholder="输入产品名称" class="w-full h-[32px] pl-[12px] pr-[32px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:border-[#1473e6] focus:outline-none" />
+            <i class="fas fa-search absolute right-[10px] top-[9px] text-[#999] cursor-pointer"></i>
+          </div>
+          <button data-create-product class="h-[32px] px-[16px] bg-[#1473e6] text-white rounded-[4px] text-[14px] hover:bg-[#115ebb] flex items-center"><i class="fas fa-plus mr-[4px]"></i> 新建</button>
+        </div>
+      </div>
+      <div class="p-[24px] flex-1 overflow-y-auto">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-[20px] mb-[24px]">${cards}</div>
+        <div class="flex justify-between items-center">
+          <span class="text-[14px] text-[#666]">共${Products.list.length}条数据</span>
+          <div class="flex space-x-[8px]">
+            <button class="w-[32px] h-[32px] flex items-center justify-center border border-[#d9d9d9] rounded-[4px] text-[#ccc] cursor-not-allowed bg-white"><i class="fas fa-chevron-left text-[12px]"></i></button>
+            <button class="w-[32px] h-[32px] flex items-center justify-center border border-[#1473e6] text-[#1473e6] rounded-[4px] bg-white">1</button>
+            <button class="w-[32px] h-[32px] flex items-center justify-center border border-[#d9d9d9] rounded-[4px] text-[#ccc] cursor-not-allowed bg-white"><i class="fas fa-chevron-right text-[12px]"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  };
+
+  function productFormDrawer(mode, data) {
+    const isEdit = mode === 'edit';
+    const f = data || {};
+    const disCls = isEdit ? 'bg-[#f5f5f5] text-[#999] cursor-not-allowed' : 'focus:border-[#1473e6] bg-white';
+    const isStandard = (f.productVersion === 'standard');
+    const standardBlock = `
+      <div data-standard-block class="${isStandard ? '' : 'hidden'}">
+        <div class="mb-[24px]">
+          <label class="block text-[14px] text-[#333] mb-[8px]"><span class="text-[#e1251b] mr-[4px]">*</span>产品品类</label>
+          <div class="relative"><select class="w-full h-[32px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] appearance-none focus:border-[#1473e6] focus:outline-none bg-white">
+            <option value="">请选择产品品类</option><option ${f.productCategory==='空气净化器'?'selected':''}>空气净化器</option><option>冰箱</option><option>洗衣机</option><option>空调</option><option>扫地机器人</option>
+          </select><i class="fas fa-chevron-down absolute right-[12px] top-[10px] text-[12px] text-[#ccc] pointer-events-none"></i></div>
+        </div>
+        <div class="mb-[24px]"><label class="block text-[14px] text-[#333] mb-[8px]">产品部件</label>
+          <input type="text" value="${f.productPart||''}" placeholder="请输入产品部件" class="w-full h-[32px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:border-[#1473e6] focus:outline-none" /></div>
+        <div class="mb-[24px]"><label class="block text-[14px] text-[#333] mb-[8px]">IoT平台</label>
+          <div class="relative"><select class="w-full h-[32px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] appearance-none focus:border-[#1473e6] focus:outline-none bg-white">
+            <option value="">请选择IoT平台</option><option ${f.iotPlatform==='小家'?'selected':''}>小家</option><option>京鱼座</option><option>美的美居</option><option ${f.iotPlatform==='集贤'?'selected':''}>集贤</option>
+          </select><i class="fas fa-chevron-down absolute right-[12px] top-[10px] text-[12px] text-[#ccc] pointer-events-none"></i></div></div>
+        <div><label class="block text-[14px] text-[#333] mb-[8px]"><span class="text-[#e1251b] mr-[4px]">*</span>型号描述</label>
+          <textarea class="w-full h-[80px] p-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] resize-none focus:border-[#1473e6] focus:outline-none" placeholder="请输入型号描述">${f.typeDesc||''}</textarea></div>
+      </div>`;
+    const inner = `
+      <div class="flex flex-col h-full">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#e5e5e5]">
+          <h2 class="text-[18px] font-medium text-[#333]">${isEdit?'编辑产品':'新建产品'}</h2>
+          <button data-close class="text-[#999] hover:text-[#333]"><i class="fas fa-times text-[20px]"></i></button>
+        </div>
+        <div class="flex-1 overflow-y-auto px-[24px] py-[20px] space-y-[24px]">
+          <div><label class="block text-[14px] text-[#333] mb-[8px]"><span class="text-[#e1251b] mr-[4px]">*</span>产品名称</label>
+            <input type="text" data-f-name value="${f.name||''}" placeholder="请输入" ${isEdit?'disabled':''} class="w-full h-[32px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:outline-none ${disCls}" /></div>
+          <div><label class="block text-[14px] text-[#333] mb-[8px]"><span class="text-[#e1251b] mr-[4px]">*</span>产品版本</label>
+            <div class="relative"><select data-version-select ${isEdit?'disabled':''} class="w-full h-[32px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] appearance-none focus:outline-none ${isEdit?'bg-[#f5f5f5] text-[#999] cursor-not-allowed':'bg-white text-[#999] focus:border-[#1473e6]'}">
+              <option value="">请选择产品版本</option><option value="lite" ${f.productVersion==='lite'?'selected':''}>lite版</option><option value="standard" ${f.productVersion==='standard'?'selected':''}>标准版</option>
+            </select><i class="fas fa-chevron-down absolute right-[12px] top-[10px] text-[12px] text-[#ccc] pointer-events-none"></i></div></div>
+          <div><label class="block text-[14px] text-[#333] mb-[8px]">产品型号</label>
+            <input type="text" value="${f.productType||''}" placeholder="如果不填写将默认等于产品名称/产品名称的型号" ${isEdit?'disabled':''} class="w-full h-[32px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:outline-none ${disCls}" /></div>
+          ${standardBlock}
+          <div><label class="block text-[14px] text-[#333] mb-[8px]">开发板ID <i class="far fa-question-circle text-[#999] ml-[4px]"></i></label>
+            <input type="text" value="${f.devBoardId||''}" placeholder="输入开发板ID, 例如 kevin-box-2" class="w-full h-[32px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:border-[#1473e6] focus:outline-none" /></div>
+          <div><label class="block text-[14px] text-[#333] mb-[8px]">开发板类型</label>
+            <input type="text" value="${f.devBoardType||''}" placeholder="输入开发板类型" class="w-full h-[32px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:border-[#1473e6] focus:outline-none" /></div>
+          <div><label class="block text-[14px] text-[#333] mb-[8px]">序列号前缀 <i class="far fa-question-circle text-[#999] ml-[4px]"></i></label>
+            <input type="text" value="${f.serialPrefix||''}" placeholder="16个字符，由大写字母、数字、下划线组成，以下划线结尾" class="w-full h-[32px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:border-[#1473e6] focus:outline-none" /></div>
+          <div><label class="block text-[14px] text-[#333] mb-[8px]">产品描述</label>
+            <textarea class="w-full h-[100px] p-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] resize-none focus:border-[#1473e6] focus:outline-none" placeholder="请输入">${f.desc||''}</textarea></div>
+        </div>
+        <div class="px-[24px] py-[16px] border-t border-[#e5e5e5] flex justify-end bg-white">
+          <button data-close class="px-[16px] py-[6px] border border-[#d9d9d9] rounded-[4px] text-[14px] mr-[12px] hover:bg-[#f5f5f5]">取消</button>
+          <button data-submit class="px-[16px] py-[6px] bg-[#1473e6] text-white rounded-[4px] text-[14px] hover:bg-[#115ebb]">提交</button>
+        </div>
+      </div>`;
+    openDrawer(inner, { onMount(w){
+      w.querySelectorAll('[data-ins-back]').forEach(b=>b.addEventListener('click',()=>{ AC.acSetTab='list'; w.remove(); acInstructionSetDrawer(); }));
+      const vs = w.querySelector('[data-version-select]');
+      const sb = w.querySelector('[data-standard-block]');
+      if (vs && !isEdit) vs.addEventListener('change',()=>{ sb.classList.toggle('hidden', vs.value!=='standard'); });
+      w.querySelector('[data-submit]').addEventListener('click',()=>{
+        if(isEdit){ w.remove(); showToast('保存成功'); return; }
+        const nm=(w.querySelector('[data-f-name]')?.value||'').trim();
+        if(!nm){ showToast('请输入产品名称'); return; }
+        const ver=vs?vs.value:'';
+        if(!ver){ showToast('请选择产品版本'); return; }
+        const now=new Date();
+        const pad=n=>('0'+n).slice(-2);
+        const date=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        Products.list.unshift({ id:String(Math.floor(10000+Math.random()*89999)), name:nm, voice:'美声-男声', date, author:'jd_cVqWlSefhCQV', productVersion:ver, productType:nm+'-型号', productCategory:'', productPart:'', iotPlatform:'小家', typeDesc:'', devBoardId:'-', devBoardType:'-', serialPrefix:'-', desc:'' });
+        w.remove(); renderApp(); showToast('创建成功');
+      });
+    }});
+  }
+
+  window.PageEvents.index = function() {
+    const root = document.getElementById('app');
+    root.querySelector('[data-create-product]')?.addEventListener('click', ()=>productFormDrawer('create'));
+    root.querySelectorAll('[data-card-config]').forEach(card=>{
+      card.addEventListener('click',(e)=>{
+        if (e.target.closest('[data-card-menu]')||e.target.closest('[data-card-dropdown]')) return;
+        const idx = +card.getAttribute('data-card-config');
+        const data = Products.list[idx];
+        State.currentAppData = data; State.currentAppVersion = data.productVersion || 'lite';
+        setCurrentPage('appConfig');
+      });
+    });
+    root.querySelectorAll('[data-card-menu]').forEach(btn=>{
+      btn.addEventListener('click',(e)=>{ e.stopPropagation();
+        const idx = btn.getAttribute('data-card-menu');
+        const dd = root.querySelector(`[data-card-dropdown="${idx}"]`);
+        root.querySelectorAll('[data-card-dropdown]').forEach(x=>{ if(x!==dd) x.classList.add('hidden'); });
+        dd.classList.toggle('hidden');
+      });
+    });
+    root.querySelectorAll('[data-card-edit]').forEach(b=>b.addEventListener('click',(e)=>{ e.stopPropagation(); productFormDrawer('edit', Products.list[+b.getAttribute('data-card-edit')]); }));
+    root.querySelectorAll('[data-card-device]').forEach(b=>b.addEventListener('click',(e)=>{ e.stopPropagation(); setCurrentPage('deviceManage'); }));
+    root.querySelectorAll('[data-card-delete]').forEach(b=>b.addEventListener('click',(e)=>{ e.stopPropagation();
+      confirmModal({ title:'deco-sandbox.jd.com 上的嵌入式页面显示', content:'确定要删除该产品吗？此操作无法恢复。', hint:'提示：存在正在使用的设备时无法删除。', onConfirm:()=>showToast('删除成功') });
+    }));
+  };
+  </script>
+
+  <!-- ============ 型号库 ModelLibraryPage ============ -->
+  <script>
+  window.Pages.modelLibrary = function(){
+    const models = [
+      { name:'0724-joyinside-1-Model', category:'通用', part:['测试'], platform:'小家' },
+      { name:'产品4-DRAFT的型号', category:'-', part:['-'], platform:'-' },
+      { name:'产品4的型号', category:'-', part:['-'], platform:'-' },
+      { name:'66666', category:'-', part:['-'], platform:'-' },
+      { name:'333', category:'烟灶', part:['1'], platform:'-' },
+      { name:'333', category:'浴室柜', part:['1','2'], platform:'-' },
+      { name:'2222', category:'-', part:['-'], platform:'-' },
+      { name:'1111', category:'-', part:['-'], platform:'-' },
+    ];
+    const rows = models.map(m=>`
+      <tr class="border-b border-[#f0f0f0] hover:bg-[#fcfcfc]">
+        <td class="py-[16px] px-[16px] text-[#333] text-[14px]">${m.name}</td>
+        <td class="py-[16px] px-[16px] text-[#333] text-[14px]">${m.category}</td>
+        <td class="py-[16px] px-[16px] text-[#333] text-[14px]"><div class="flex items-center gap-[4px]">${m.part.map(p=>p!=='-'?`<span class="px-[6px] py-[2px] bg-[#f5f5f5] text-[#666] text-[12px] border border-[#e5e5e5] rounded-[4px]">${p}</span>`:'<span>-</span>').join('')}</div></td>
+        <td class="py-[16px] px-[16px] text-[#333] text-[14px]">${m.platform}</td>
+      </tr>`).join('');
+    return `
+    <div class="flex-1 flex flex-col p-[24px] overflow-y-auto bg-[#f4f5f7]">
+      <div class="flex justify-between items-start mb-[24px]">
+        <div>
+          <h1 class="text-[24px] font-bold text-[#333] mb-[8px]">型号库</h1>
+          <p class="text-[14px] text-[#666]">型号库管理，管理所有产品型号。</p>
+        </div>
+        <div class="flex items-center gap-[16px]">
+          <div class="relative w-[280px]">
+            <input type="text" placeholder="搜索型号" class="w-full h-[36px] pl-[12px] pr-[36px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:outline-none focus:border-[#1473e6]"/>
+            <button class="absolute right-[12px] top-[10px] text-[#999] hover:text-[#1473e6]"><i class="fas fa-search"></i></button>
+          </div>
+          <button title="当前产品型号在产品创建时同步创建" class="h-[36px] px-[16px] bg-[#1473e6] text-white rounded-[4px] text-[14px] flex items-center opacity-50 cursor-not-allowed"><i class="fas fa-plus mr-[6px] text-[12px]"></i>新建型号</button>
+        </div>
+      </div>
+      <div class="bg-white rounded-[8px] p-[24px] shadow-sm flex-1 flex flex-col">
+        <table class="w-full text-left border-collapse">
+          <thead><tr class="border-b border-[#f0f0f0] bg-[#f9fafb]">
+            <th class="py-[16px] px-[16px] font-medium text-[#333] text-[14px] w-[35%]">产品型号</th>
+            <th class="py-[16px] px-[16px] font-medium text-[#333] text-[14px] w-[20%]">产品品类</th>
+            <th class="py-[16px] px-[16px] font-medium text-[#333] text-[14px] w-[25%]">产品部件</th>
+            <th class="py-[16px] px-[16px] font-medium text-[#333] text-[14px] w-[20%]">IOT平台</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div class="mt-auto pt-[24px] flex items-center justify-end text-[13px] text-[#666]">
+          <span class="mr-[16px]">共 8 条</span>
+          <div class="flex items-center gap-[8px]">
+            <button class="w-[28px] h-[28px] flex items-center justify-center border border-[#d9d9d9] rounded-[4px] text-[#ccc] cursor-not-allowed bg-white"><i class="fas fa-chevron-left text-[12px]"></i></button>
+            <button class="w-[28px] h-[28px] flex items-center justify-center border border-[#1473e6] rounded-[4px] text-[#1473e6] font-medium bg-[#eef5fd]">1</button>
+            <button class="w-[28px] h-[28px] flex items-center justify-center border border-[#d9d9d9] rounded-[4px] text-[#ccc] cursor-not-allowed bg-white"><i class="fas fa-chevron-right text-[12px]"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  };
+  </script>
+
+  <!-- ============ 指令库 InstructionLibraryPage ============ -->
+  <script>
+  window.Pages.instructionLibrary = function(){
+    const mockData = [
+      { title:'指令集2.0', desc:'111', author:'jd_40d11979fdb53', time:'2026-07-21 13:51', isOld:false },
+      { title:'灯的指令集', desc:'灯', author:'jd_40d11979fdb53', time:'2026-06-26 15:53', isOld:false },
+      { title:'我的测试指令集', desc:'测试指令集', author:'jd_40d11979fdb53', time:'2026-05-25 16:31', isOld:false },
+      { title:'自定义指令集2', desc:'我的自定义指令集2', author:'jd_40d11979fdb53', time:'2026-05-09 13:59', isOld:true },
+      { title:'自定义指令集1', desc:'我的自定义指令集', author:'jd_40d11979fdb53', time:'2026-05-09 13:59', isOld:true },
+      { title:'测试指令集', desc:'11', author:'jd_40d11979fdb53', time:'2026-04-14 16:11', isOld:true },
+      { title:'退出对话', desc:'', author:'system', time:'2026-04-02 21:21', isOld:false },
+      { title:'电量查询', desc:'', author:'system', time:'2026-03-28 16:31', isOld:false },
+      { title:'音量调节', desc:'', author:'system', time:'2026-03-28 16:30', isOld:false },
+    ];
+    const cards = mockData.map(item=>`
+      <div class="w-[calc(25%-12px)] min-w-[240px] bg-[#fcfcfc] border border-[#e5e5e5] rounded-[8px] p-[16px] flex flex-col">
+        <div class="flex items-center mb-[8px]">
+          ${item.isOld?`<span class="inline-block px-[4px] py-[2px] bg-[#f0f0f0] text-[#999] text-[12px] rounded-[2px] mr-[8px]">旧版</span>`:''}
+          <span class="text-[16px] font-medium text-[#666] truncate">${item.title}</span>
+        </div>
+        <div class="text-[13px] text-[#999] mb-[24px] line-clamp-2 h-[40px]">${item.desc||' '}</div>
+        <div class="mt-auto flex flex-col gap-[4px] pt-[12px] border-t border-[#f0f0f0]">
+          <div class="flex items-center justify-between text-[12px] text-[#999]">
+            <div class="flex items-center"><i class="fas fa-user text-[10px] mr-[6px]"></i><span class="truncate max-w-[100px]">${item.author}</span></div>
+            <div class="flex items-center"><i class="far fa-clock text-[10px] mr-[6px]"></i><span>${item.time}</span></div>
+          </div>
+        </div>
+      </div>`).join('');
+    return `
+    <div class="w-full h-full flex flex-col p-[24px] bg-[#f4f5f7] overflow-y-auto">
+      <div class="flex items-start justify-between mb-[20px]">
+        <div class="flex flex-col">
+          <h1 class="text-[20px] font-bold text-[#333] mb-[8px]">指令库</h1>
+          <span class="text-[13px] text-[#666]">指令库已停用,历史数据仅作留存展示,不再支持新增、编辑与调用。</span>
+        </div>
+        <div class="flex items-center gap-[12px]">
+          <div class="relative w-[240px]">
+            <input type="text" placeholder="搜索指令集名称" class="w-full h-[32px] pl-[12px] pr-[32px] border border-[#e5e5e5] rounded-[4px] text-[14px] bg-[#f5f5f5] text-[#333] outline-none"/>
+            <i class="fas fa-search absolute right-[10px] top-[9px] text-[14px] text-[#999] pointer-events-none"></i>
+          </div>
+     <button class="h-[32px] px-[16px] bg-[#d9d9d9] text-[#fff] text-[14px] rounded-[4px] cursor-not-allowed" disabled>+ 新建指令集</button>
+        </div>
+      </div>
+      <div class="w-full mb-[20px] p-[16px] bg-[#fff7e6] border border-[#ffd591] rounded-[8px] flex items-start relative" data-il-alert>
+        <i class="fas fa-bullhorn text-[#faad14] text-[18px] mt-[2px] mr-[12px]"></i>
+        <div class="flex flex-col">
+          <span class="text-[14px] font-medium text-[#333] mb-[8px]">指令数据已迁移,指令库暂时停用</span>
+          <div class="text-[13px] text-[#666] leading-relaxed">
+            指令库不再支持新增指令集与指令,历史数据仅作留存展示,<strong>不再支持编辑与调用。</strong> 原有数据已按类型迁移至以下位置:<br/>
+            · <strong>AIOT 指令集</strong> 已迁移至 <a href="#" class="text-[#1473e6] hover:underline">产品管理 → 智能体 → AIOT 设备控制 →</a><br/>
+            · 旧版自定义指令、系统指令 已迁移至 <a href="#" class="text-[#1473e6] hover:underline">「指令」模块 →</a>
+          </div>
+        </div>
+        <button data-il-alert-close class="absolute right-[16px] top-[16px] text-[#999] hover:text-[#333]"><i class="fas fa-times text-[14px]"></i></button>
+      </div>
+      <div class="flex flex-col">
+        <div class="flex items-center text-[12px] text-[#999] mb-[16px]"><i class="fas fa-lock mr-[6px]"></i> 以下为历史留存数据，已置灰不可编辑、调用或删除</div>
+        <div class="flex flex-wrap gap-[16px]">${cards}</div>
+        <div class="flex items-center justify-end mt-[24px] text-[13px] text-[#666]">
+          <span>共 11 条</span>
+          <span class="mx-[12px]">&lt;</span>
+          <span class="w-[28px] h-[28px] flex items-center justify-center border border-[#1473e6] text-[#1473e6] rounded-[4px] bg-white">1</span>
+          <span class="mx-[12px]">&gt;</span>
+          <div class="flex items-center cursor-pointer">100 条/页 <i class="fas fa-chevron-down text-[10px] ml-[4px]"></i></div>
+        </div>
+      </div>
+    </div>`;
+  };
+  window.PageEvents.instructionLibrary = function(){
+    const root = document.getElementById('app');
+    const close = root.querySelector('[data-il-alert-close]');
+    if(close) close.addEventListener('click',()=>{ const a=root.querySelector('[data-il-alert]'); if(a) a.remove(); });
+  };
+  </script>
+
+  <!-- ============ MCP服务 McpServicePage ============ -->
+  <script>
+  window.Mcp = {
+    list: [
+      { id:'1', name:'测试123', desc:'', status:'offline', isPublic:true, tools:[] },
+      { id:'2', name:'优优同学', desc:'', status:'offline', isPublic:true, tools:[] },
+      { id:'3', name:'切换智能体配置', desc:'部署mcp支持用户切换语言、音色、模型...', status:'offline', isPublic:true, tools:[] },
+      { id:'4', name:'10011_deviceControl', desc:'正式设备控制端点', status:'online', isPublic:false, tools:['getUserOwnedDeviceInfo','batchControlDevice'] },
+      { id:'5', name:'10009_deviceControlUat', desc:'测试环境设备控制端点', status:'online', isPublic:true, tools:['getUserOwnedDeviceInfo','batchControlDevice'] },
+      { id:'6', name:'测试MCP', desc:'测试的MCP', status:'offline', isPublic:true, tools:[] },
+    ]
+  };
+  function mcpRowHtml(mcp){
+    const status = mcp.status==='online'
+      ? `<span class="w-[6px] h-[6px] rounded-full mr-[8px] bg-[#52c41a]"></span><span class="text-[#333]">在线</span>`
+      : `<span class="w-[6px] h-[6px] rounded-full mr-[8px] bg-[#d9d9d9]"></span><span class="text-[#999]">离线</span>`;
+    const tools = mcp.tools.length ? `<div class="flex flex-col space-y-[4px]">${mcp.tools.map(t=>`<span class="inline-block px-[8px] py-[2px] bg-[#f5f5f5] text-[#666] rounded-[4px] border border-[#d9d9d9] text-[12px]">${t}</span>`).join('')}</div>` : '';
+    return `
+    <tr class="border-b border-[#e5e5e5] hover:bg-[#fcfcfc]">
+      <td class="px-[24px] py-[16px] text-[14px] text-[#333]">${mcp.name}</td>
+      <td class="px-[24px] py-[16px] text-[14px] text-[#666] max-w-[200px] truncate">${mcp.desc}</td>
+      <td class="px-[24px] py-[16px] text-[14px]"><div class="flex items-center">${status}</div></td>
+      <td class="px-[24px] py-[16px] text-[14px]">${tools}</td>
+      <td class="px-[24px] py-[16px]">${switchHtml('mcp-pub-'+mcp.id, mcp.isPublic)}</td>
+      <td class="px-[24px] py-[16px] text-[14px]">
+        <span class="text-[#1473e6] cursor-pointer mr-[12px] hover:underline" data-mcp-edit="${mcp.id}">编辑</span>
+        <span class="text-[#e1251b] cursor-pointer hover:underline" data-mcp-del="${mcp.id}">删除</span>
+      </td>
+    </tr>`;
+  }
+  window.Pages.mcpService = function(){
+    return `
+    <div class="flex flex-col h-full bg-[#f4f5f7]">
+      <div class="px-[24px] py-[16px] bg-white border-b border-[#e5e5e5] flex items-center justify-between">
+        <h1 class="text-[20px] font-bold text-[#333]">MCP服务</h1>
+        <button data-mcp-create class="h-[32px] px-[16px] bg-[#1473e6] text-white rounded-[4px] text-[14px] hover:bg-[#115ebb]">创建MCP接入</button>
+      </div>
+      <div class="p-[24px] flex-1 overflow-y-auto">
+        <div class="bg-white rounded-[8px] border border-[#e5e5e5] overflow-hidden">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-[#fafafa] border-b border-[#e5e5e5]"><tr>
+              <th class="px-[24px] py-[12px] text-[14px] font-medium text-[#333]">MCP服务</th>
+              <th class="px-[24px] py-[12px] text-[14px] font-medium text-[#333]">描述</th>
+              <th class="px-[24px] py-[12px] text-[14px] font-medium text-[#333]">状态</th>
+              <th class="px-[24px] py-[12px] text-[14px] font-medium text-[#333]">工具</th>
+              <th class="px-[24px] py-[12px] text-[14px] font-medium text-[#333]">公开</th>
+              <th class="px-[24px] py-[12px] text-[14px] font-medium text-[#333]">操作</th>
+            </tr></thead>
+            <tbody data-mcp-body>${window.Mcp.list.map(mcpRowHtml).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  };
+  function mcpModal(mode, mcp){
+    const isEdit = mode==='edit';
+    const f = isEdit ? { name:mcp.name, url:'http://example.com/api', secret:'***', desc:mcp.desc } : { name:'', url:'', secret:'', desc:'' };
+    const radio = (checked)=>`<span class="w-[16px] h-[16px] rounded-full border mr-[8px] flex items-center justify-center ${checked?'border-[#1473e6]':'border-[#d9d9d9]'}">${checked?'<span class="w-[8px] h-[8px] bg-[#1473e6] rounded-full"></span>':''}</span>`;
+    const html = `
+      <div class="bg-white w-[480px] rounded-[8px] shadow-xl flex flex-col">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#e5e5e5]">
+          <h3 class="text-[16px] font-medium text-[#333]">${isEdit?'编辑MCP服务':'创建MCP服务'}</h3>
+          <i class="fas fa-times text-[#999] cursor-pointer" data-close></i>
+        </div>
+        <div class="p-[24px] space-y-[16px]">
+          <div><label class="block text-[14px] mb-[8px]"><span class="text-[#e1251b] mr-[4px]">*</span>MCP服务名称</label>
+            <input type="text" value="${f.name}" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:outline-none focus:border-[#1473e6]"/></div>
+          <div class="flex items-center space-x-[24px]">
+            <label class="flex items-center text-[14px] ${isEdit?'cursor-not-allowed opacity-60':'cursor-pointer'}">${radio(false)}Streamable HTTP</label>
+            <label class="flex items-center text-[14px] ${isEdit?'cursor-not-allowed opacity-60':'cursor-pointer'}">${radio(true)}SSE</label>
+          </div>
+          <div><label class="block text-[14px] mb-[8px]"><span class="text-[#e1251b] mr-[4px]">*</span>MCP服务地址</label>
+            <input type="text" placeholder="例如：http://localhost:3000/sse" value="${f.url}" ${isEdit?'disabled':''} class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] ${isEdit?'bg-[#f5f5f5] cursor-not-allowed text-[#999]':'focus:outline-none focus:border-[#1473e6]'}"/></div>
+          <div><label class="block text-[14px] mb-[8px]">认证密钥</label>
+            <input type="text" placeholder="选填" value="${f.secret}" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:outline-none focus:border-[#1473e6]"/></div>
+          <div><label class="block text-[14px] mb-[8px]">描述</label>
+            <textarea class="w-full h-[80px] p-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] resize-none focus:outline-none focus:border-[#1473e6]">${f.desc}</textarea></div>
+        </div>
+        <div class="px-[24px] py-[16px] border-t border-[#e5e5e5] flex justify-end space-x-[12px]">
+          <button data-close class="px-[16px] py-[6px] border border-[#d9d9d9] rounded-[4px] text-[14px]">取消</button>
+          <button data-ok class="px-[16px] py-[6px] bg-[#1473e6] text-white rounded-[4px] text-[14px]">确定</button>
+        </div>
+      </div>`;
+    const wrap = openModal(html);
+    wrap.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>wrap.remove()));
+    wrap.querySelector('[data-ok]').addEventListener('click',()=>{ wrap.remove(); showToast(isEdit?'保存成功':'创建成功'); });
+  }
+  window.PageEvents.mcpService = function(){
+    const root = document.getElementById('app');
+    root.querySelector('[data-mcp-create]').addEventListener('click',()=>mcpModal('create'));
+    root.querySelectorAll('[data-mcp-edit]').forEach(b=>b.addEventListener('click',()=>mcpModal('edit', window.Mcp.list.find(m=>m.id===b.getAttribute('data-mcp-edit')))));
+    root.querySelectorAll('[data-mcp-del]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.getAttribute('data-mcp-del');
+      confirmModal({ title:'deco-sandbox.jd.com 上的嵌入式页面显示', content:'确定要删除该接入点吗？此操作无法恢复。', hint:'提示：已被产品使用的MCP服务无法删除。', onConfirm:()=>{ window.Mcp.list = window.Mcp.list.filter(m=>m.id!==id); renderApp(); showToast('删除成功'); } });
+    }));
+  };
+  </script>
+
+  <!-- ============ 设备管理 DeviceManagePage ============ -->
+  <script>
+  window.Devices = {
+    list: [
+      { id:'1', name:'京东京造 AI陪伴毛绒玩偶-智星狗', product:'听写', appId:'10904', dialogId:'89dc32dbdc0f43a8b2552eda...', sn:'Forcebot_SN_c939df7b-0232-41...', type:'实体设备', voice:'小犀', auth:'-' },
+      { id:'2', name:'京东京造 AI陪伴毛绒玩偶-智星狗', product:'听写', appId:'10904', dialogId:'b3dabf8ffcf04408b0d423dd6...', sn:'Forcebot_SN_b55158ce-d973-41...', type:'实体设备', voice:'小犀', auth:'-' },
+      { id:'3', name:'京东京造 AI陪伴毛绒玩偶-智星狗', product:'听写', appId:'10904', dialogId:'84a55e6030dd43f2a3c53963...', sn:'Forcebot_SN_a74748b2-a46d-43...', type:'实体设备', voice:'小犀', auth:'-' },
+    ]
+  };
+  function deviceRowHtml(dev){
+    return `
+    <tr class="border-b border-[#e5e5e5] hover:bg-[#fcfcfc]">
+      <td class="px-[16px] py-[16px] text-[14px] text-[#333] w-[180px]">${dev.name}</td>
+      <td class="px-[16px] py-[16px] text-[14px] text-[#333]">${dev.product}</td>
+      <td class="px-[16px] py-[16px] text-[14px] text-[#333]">${dev.appId}</td>
+      <td class="px-[16px] py-[16px] text-[14px] text-[#666]">${dev.dialogId} <i class="far fa-copy text-[#1473e6] cursor-pointer ml-[4px]"></i></td>
+      <td class="px-[16px] py-[16px] text-[14px] text-[#666]">${dev.sn} <i class="far fa-copy text-[#1473e6] cursor-pointer ml-[4px]"></i></td>
+      <td class="px-[16px] py-[16px]"><span class="inline-block px-[6px] py-[12px] bg-[#e6f7ff] text-[#1473e6] text-[12px] rounded-[4px] border border-[#91d5ff] text-center" style="writing-mode:vertical-rl">${dev.type}</span></td>
+      <td class="px-[16px] py-[16px] text-[14px] text-[#333]">${dev.voice}</td>
+      <td class="px-[16px] py-[16px] text-[14px] text-[#333]">${dev.auth}</td>
+      <td class="px-[16px] py-[16px] text-[14px]">
+        <i class="fas fa-pen text-[#666] cursor-pointer hover:text-[#1473e6] mr-[16px]" data-dev-edit="${dev.id}"></i>
+        <i class="far fa-trash-alt text-[#e1251b] cursor-pointer hover:opacity-80" data-dev-del="${dev.id}"></i>
+      </td>
+    </tr>`;
+  }
+  window.Pages.deviceManage = function(){
+    return `
+    <div class="flex flex-col h-full bg-[#f4f5f7]">
+      <div class="px-[24px] py-[16px] bg-white border-b border-[#e5e5e5] flex items-center justify-between">
+        <div>
+          <h1 class="text-[20px] font-bold text-[#333] mb-[4px]">设备管理</h1>
+          <p class="text-[14px] text-[#999]">手动只允许创建虚拟设备，正式设备需要通过接口自动创建</p>
+        </div>
+        <div class="flex items-center space-x-[12px]">
+          <select class="h-[32px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] bg-white w-[140px]"><option value="">选择产品</option><option value="听写">听写</option></select>
+          <div class="relative w-[220px]"><input type="text" placeholder="输入设备名称/SN编码" class="w-full h-[32px] pl-[12px] pr-[32px] border border-[#d9d9d9] rounded-[4px] text-[14px]"/><i class="fas fa-search absolute right-[10px] top-[9px] text-[#999]"></i></div>
+          <button data-dev-create class="h-[32px] px-[16px] bg-[#1473e6] text-white rounded-[4px] text-[14px] hover:bg-[#115ebb]"><i class="fas fa-plus mr-[4px]"></i> 新建</button>
+          <button data-dev-batch class="h-[32px] px-[16px] bg-[#1473e6] text-white rounded-[4px] text-[14px] hover:bg-[#115ebb]"><i class="fas fa-bars mr-[4px]"></i> 批量开通音乐资源</button>
+          <button data-dev-shortcode class="h-[32px] px-[16px] bg-white border border-[#1473e6] text-[#1473e6] rounded-[4px] text-[14px] hover:bg-[#eef5fd]"><i class="fas fa-exchange-alt mr-[4px]"></i> 短码查询</button>
+        </div>
+      </div>
+      <div class="p-[24px] flex-1 overflow-y-auto">
+        <div class="bg-white rounded-[8px] border border-[#e5e5e5] overflow-hidden">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-[#fafafa] border-b border-[#e5e5e5]"><tr>
+              <th class="px-[16px] py-[12px] text-[14px] font-medium text-[#333]">名称</th>
+              <th class="px-[16px] py-[12px] text-[14px] font-medium text-[#333]">产品名</th>
+              <th class="px-[16px] py-[12px] text-[14px] font-medium text-[#333]">APPID</th>
+              <th class="px-[16px] py-[12px] text-[14px] font-medium text-[#333]">ID (用于对话使用)</th>
+              <th class="px-[16px] py-[12px] text-[14px] font-medium text-[#333]">SN编码</th>
+              <th class="px-[16px] py-[12px] text-[14px] font-medium text-[#333]">类型</th>
+              <th class="px-[16px] py-[12px] text-[14px] font-medium text-[#333]">音色</th>
+              <th class="px-[16px] py-[12px] text-[14px] font-medium text-[#333]">资源授权</th>
+              <th class="px-[16px] py-[12px] text-[14px] font-medium text-[#333]">操作</th>
+            </tr></thead>
+            <tbody data-dev-body>${window.Devices.list.map(deviceRowHtml).join('')}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  };
+
+  function deviceModal(mode, dev){
+    const isEdit = mode==='edit';
+    const editBlock = isEdit ? `
+      <div>
+        <label class="block text-[14px] font-medium text-[#333] mb-[12px]">音乐资源</label>
+        <div class="bg-[#f9f9f9] rounded-[8px] p-[16px] mb-[12px]">
+          <div class="text-[14px] font-medium text-[#333] mb-[12px]">音乐资源授权状态</div>
+          <div class="flex items-center text-[14px] mb-[12px] flex-wrap">
+            <span class="text-[#333] mr-[16px]">网易云音乐</span>
+            <span class="text-[#666] mr-[8px]">企业授权</span>
+            <span class="bg-[#fff1f0] text-[#f5222d] px-[6px] py-[2px] rounded-[2px] text-[12px] mr-[16px]">未授权</span>
+            <span class="text-[#666] mr-[8px]">应用授权</span>
+            <span class="bg-[#fff1f0] text-[#f5222d] px-[6px] py-[2px] rounded-[2px] text-[12px]">未授权</span>
+          </div>
+          <div class="text-[13px] text-[#666]">如需开启音乐资源授权请联系 JoyInside 产品运营</div>
+        </div>
+        <label class="flex items-center text-[14px] cursor-not-allowed opacity-50"><span class="w-[16px] h-[16px] rounded-[2px] border border-[#d9d9d9] mr-[8px]"></span>网易云音乐</label>
+      </div>
+      <div><label class="block text-[14px] font-medium text-[#333] mb-[8px]">描述</label><textarea class="w-full h-[80px] p-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] resize-none focus:outline-none focus:border-[#1473e6]" placeholder="请输入描述"></textarea></div>` : '';
+    const html = `
+      <div class="bg-white w-[520px] rounded-[8px] shadow-xl flex flex-col max-h-[85vh]">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#e5e5e5]">
+          <h3 class="text-[16px] font-medium text-[#333]">新建/编辑设备</h3>
+          <i class="fas fa-times text-[#999] cursor-pointer" data-close></i>
+        </div>
+        <div class="p-[24px] space-y-[16px] overflow-y-auto">
+          <div><label class="block text-[14px] mb-[8px]"><span class="text-[#e1251b] mr-[4px]">*</span>类型</label>
+            <select ${isEdit?'disabled':''} class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] bg-white ${isEdit?'bg-[#f5f5f5] cursor-not-allowed text-[#999]':''}"><option>${isEdit?(dev.type):'虚拟设备'}</option></select></div>
+          <div><label class="block text-[14px] mb-[8px]"><span class="text-[#e1251b] mr-[4px]">*</span>名称</label>
+            <input type="text" placeholder="请输入名称" value="${isEdit?dev.name:''}" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] focus:outline-none focus:border-[#1473e6]"/></div>
+          <div><label class="block text-[14px] mb-[8px]"><span class="text-[#e1251b] mr-[4px]">*</span>SN编码 <i class="far fa-question-circle text-[#999]"></i></label>
+            <input type="text" placeholder="请输入SN编码" ${isEdit?'disabled':''} value="${isEdit?dev.sn:''}" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] ${isEdit?'bg-[#f5f5f5] cursor-not-allowed text-[#999]':'focus:outline-none focus:border-[#1473e6]'}"/></div>
+          <div><label class="block text-[14px] mb-[8px]">音色</label>
+            <select class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] bg-white focus:outline-none focus:border-[#1473e6]"><option value="">请选择音色</option><option ${isEdit&&dev.voice==='小犀'?'selected':''}>小犀</option></select></div>
+          ${editBlock}
+        </div>
+        <div class="px-[24px] py-[16px] border-t border-[#e5e5e5] flex justify-end space-x-[12px]">
+          <button data-close class="px-[16px] py-[6px] border border-[#d9d9d9] rounded-[4px] text-[14px]">取消</button>
+          <button data-ok class="px-[16px] py-[6px] bg-[#1473e6] text-white rounded-[4px] text-[14px]">确定</button>
+        </div>
+    </div>`;
+    const wrap = openModal(html);
+    wrap.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>wrap.remove()));
+    wrap.querySelector('[data-ok]').addEventListener('click',()=>{ wrap.remove(); showToast(isEdit?'保存成功':'创建成功'); });
+  }
+
+  function shortCodeModal(){
+    const html = `
+      <div class="bg-white w-[500px] rounded-[8px] shadow-xl flex flex-col p-[24px]">
+        <div class="flex justify-between items-center mb-[20px]"><h3 class="text-[16px] font-medium text-[#333]">短码查询</h3><i class="fas fa-times text-[#999] cursor-pointer" data-close></i></div>
+        <div class="flex space-x-[12px] mb-[20px]">
+          <input type="text" data-sc-input placeholder="请输入7位短码" class="flex-1 h-[40px] px-[12px] border border-[#1473e6] rounded-[4px] text-[14px] outline-none"/>
+          <button data-sc-search class="px-[24px] h-[40px] bg-[#1473e6] text-white rounded-[4px] text-[14px]">查询</button>
+        </div>
+        <div data-sc-result></div>
+      </div>`;
+    const wrap = openModal(html);
+    wrap.querySelector('[data-close]').addEventListener('click',()=>wrap.remove());
+    wrap.querySelector('[data-sc-search]').addEventListener('click',()=>{
+      const q = wrap.querySelector('[data-sc-input]').value.trim();
+      const box = wrap.querySelector('[data-sc-result]');
+      if(q==='1234567'){
+        box.innerHTML = `<div class="bg-[#fafafa] p-[16px] rounded-[4px] space-y-[12px] text-[14px]">
+          <div class="flex"><span class="w-[80px] text-[#666]">设备名称：</span><span class="text-[#333]">京东京造 AI陪伴毛绒玩偶</span></div>
+          <div class="flex"><span class="w-[80px] text-[#666]">所属产品：</span><span class="text-[#333]">听写</span></div>
+          <div class="flex"><span class="w-[80px] text-[#666]">设备ID：</span><span class="text-[#333]">mock_dialog_id_12345</span></div>
+          <div class="flex"><span class="w-[80px] text-[#666]">SN编码：</span><span class="text-[#333]">Forcebot_SN_mock_67890</span></div></div>`;
+      } else { box.innerHTML=''; showToast('未查询到相关设备'); }
+    });
+  }
+
+  function batchAuthModal(){
+    const html = `
+      <div class="bg-white w-[640px] rounded-[12px] shadow-xl flex flex-col max-h-[85vh]">
+        <div class="flex justify-between items-center px-[24px] py-[16px] border-b border-[#e5e5e5]"><h3 class="text-[16px] font-medium text-[#333]">批量开通音乐资源</h3><i class="fas fa-times text-[#999] cursor-pointer hover:text-[#333]" data-close></i></div>
+        <div class="p-[24px] overflow-y-auto">
+          <div class="bg-[#eef5fd] text-[#1473e6] px-[16px] py-[12px] rounded-[4px] text-[14px] mb-[24px]">选择设备范围并开通指定音乐资源。</div>
+          <div class="mb-[32px]">
+            <div class="flex items-center text-[15px] font-medium text-[#333] mb-[16px]"><span class="w-[20px] h-[20px] rounded-full border border-[#d9d9d9] flex items-center justify-center text-[12px] mr-[8px]">1</span>选择设备范围</div>
+            <div class="pl-[28px] space-y-[16px]">
+              <div><label class="block text-[14px] text-[#666] mb-[8px]">设备类型</label><select class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] bg-white outline-none"><option>全部</option><option>虚拟设备</option><option>实体设备</option></select></div>
+              <div class="flex space-x-[16px]">
+                <div class="flex-1"><label class="block text-[14px] text-[#666] mb-[8px]">创建时间（起）</label><input type="text" placeholder="年 / 月 / 日" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] outline-none"/></div>
+                <div class="flex-1"><label class="block text-[14px] text-[#666] mb-[8px]">创建时间（止）</label><input type="text" placeholder="年 / 月 / 日" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[4px] text-[14px] outline-none"/></div>
+              </div>
+              <div class="text-[13px] text-[#999]">请选择完整的设备范围</div>
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center text-[15px] font-medium text-[#333] mb-[16px]"><span class="w-[20px] h-[20px] rounded-full border border-[#d9d9d9] flex items-center justify-center text-[12px] mr-[8px]">2</span>选择要开通的音乐资源</div>
+            <div class="pl-[28px]">
+              <div class="flex items-center px-[16px] py-[12px] border border-[#d9d9d9] rounded-[4px] w-fit mb-[24px]"><span class="w-[16px] h-[16px] rounded-full border-[5px] border-[#1473e6] mr-[12px]"></span><span class="bg-[#fff1f0] text-[#f5222d] border border-[#ffa39e] px-[6px] py-[2px] rounded-[2px] text-[12px] mr-[8px]">网易云</span><span class="text-[14px] text-[#333]">网易云音乐</span></div>
+              <div class="bg-[#fffbe6] px-[20px] py-[16px] rounded-[8px]"><div class="text-[14px] text-[#333] mb-[8px]">开通规则：</div><div class="text-[13px] text-[#666] leading-relaxed">· 资源需满足企业已授权 + 应用已开启权限，否则无法开通；请联系工作人员确认授权状态<br/>· 已经开通的设备不会受影响，本操作作为增量增加</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="px-[24px] py-[16px] border-t border-[#e5e5e5] flex justify-end space-x-[12px] bg-white rounded-b-[12px]">
+          <button data-close class="px-[20px] py-[6px] border border-[#d9d9d9] rounded-[20px] text-[14px] text-[#333]">取消</button>
+          <button data-ok class="px-[20px] py-[6px] bg-[#1473e6] text-white rounded-[20px] text-[14px]">确认开通</button>
+        </div>
+      </div>`;
+const wrap = openModal(html);
+    wrap.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>wrap.remove()));
+    wrap.querySelector('[data-ok]').addEventListener('click',()=>{ wrap.remove(); showToast('开通任务已提交'); });
+  }
+
+  window.PageEvents.deviceManage = function(){
+    const root = document.getElementById('app');
+    root.querySelector('[data-dev-create]').addEventListener('click',()=>deviceModal('create'));
+    root.querySelector('[data-dev-batch]').addEventListener('click',()=>batchAuthModal());
+    root.querySelector('[data-dev-shortcode]').addEventListener('click',()=>shortCodeModal());
+    root.querySelectorAll('[data-dev-edit]').forEach(b=>b.addEventListener('click',()=>deviceModal('edit', window.Devices.list.find(d=>d.id===b.getAttribute('data-dev-edit')))));
+    root.querySelectorAll('[data-dev-del]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.getAttribute('data-dev-del');
+      confirmModal({ title:'deco-sandbox.jd.com 上的嵌入式页面显示', content:'确定要删除该设备吗？此操作无法恢复。', onConfirm:()=>{ window.Devices.list = window.Devices.list.filter(d=>d.id!==id); renderApp(); showToast('删除成功'); } });
+    }));
+  };
+  </script>
+
+  <!-- ============ 应用配置页 AppConfigPage ============ -->
+  <script>
+  /* ================= AppConfigPage ================= */
+  const ALL_SKILLS = [
+    { id:'news', name:'新闻', lite:true, standard:false },
+    { id:'music', name:'音乐', lite:true, standard:false },
+    { id:'knowledge', name:'知识问答', lite:true, standard:false },
+    { id:'weather', name:'查天气', lite:true, standard:true },
+    { id:'aiot', name:'AIoT指令控制', lite:false, standard:true },
+    { id:'fangyan', name:'方言', lite:false, standard:true },
+    { id:'time', name:'查时间', lite:false, standard:true },
+    { id:'music_vod', name:'歌曲点播', lite:false, standard:true },
+    { id:'audiobook', name:'有声书点播', lite:false, standard:true },
+    { id:'search', name:'联网搜索', lite:false, standard:true },
+    { id:'qa', name:'知识问答', lite:false, standard:true },
+    { id:'voice', name:'音色切换', lite:false, standard:true },
+    { id:'chat', name:'闲聊', lite:false, standard:true }
+  ];
+
+  const AC = window.AppConfig = {
+    version: 'standard',
+    selectedSkillIds: [],
+    strategies: { intro:true, push:false, feedback:false, emotion:false },
+    customSkills: [],
+    productInfoExpanded: true,
+    mcpServices: [{ id:'mcp-weather', name:'天气服务', desc:'weather.mcp.jd.com' }],
+    aiotEnabled: false,
+    promptType: 'auto',
+    instructionSets: [
+      { id:'set-1', name:'默认指令集', feedback:'reply' },
+      { id:'set-2', name:'灯光控制指令集', feedback:'silent' }
+    ],
+    activeSetId: 'set-1',
+    instructionsBySet: {
+      'set-1':[
+        { id:'ins-1', name:'开灯', code:'light_on_01', dataType:'-', type:'非控制项指令', actions:['设置'], silent:false, createdAt:'2026/05/25 11:07:19' },
+        { id:'ins-2', name:'调节亮度', code:'brightness_set', dataType:'开关', type:'控制项指令', actions:['设置','查询'], silent:false, createdAt:'2026/05/20 14:10:50' },
+        { id:'ins-3', name:'切换模式', code:'mode_switch', dataType:'开关', type:'控制项指令', actions:['设置','查询'], silent:false, createdAt:'2026/05/19 22:43:36' }
+      ],
+      'set-2':[
+        { id:'ins-2-1', name:'打开客厅灯', code:'living_light_on', dataType:'开关', type:'控制项指令', actions:['设置'], silent:false, createdAt:'2026/06/12 09:22:41' },
+        { id:'ins-2-2', name:'关闭卧室灯', code:'bedroom_light_off', dataType:'开关', type:'控制项指令', actions:['设置'], silent:true, createdAt:'2026/06/10 21:03:17' }
+      ]
+    },
+    isTaskPlannerEnabled: false,
+    fillerSentences: ['明白。'],
+    expandedSteps: { intent:false, planner:false, tool:false, devstate:false },
+    agents: [
+      { id:'agent-default', name:'主智能体', isDefault:true },
+      { id:'agent-child', name:'儿童模式', isDefault:false }
+    ],
+    activeAgentId: 'agent-default',
+    skillDropdownOpen: false,
+    promptDirty: false,
+    commands: [{ id:'cmd-1', name:'制氧机-案例', type:'自定义' }],
+    tools: [
+      { name:'range_check', desc:'数值/枚举范围与条件取值校验', params:[{k:'value',t:'number|string'},{k:'range',t:'object'}], ret:'{ ok:boolean, fixed?:值 }' },
+      { name:'cron_parse', desc:'自然语言时间解析为 cron 表达式', params:[{k:'text',t:'string'}], ret:'{ cron:string, next?:string }' },
+      { name:'device_capability_query', desc:'查询设备能力清单与取值范围', params:[{k:'deviceId',t:'string'}], ret:'{ caps:object[] }' },
+      { name:'unit_convert', desc:'单位换算（温度/亮度/百分比等）', params:[{k:'value',t:'number'},{k:'from',t:'string'},{k:'to',t:'string'}], ret:'{ value:number, unit:string }' }
+    ],
+    acSetTab: 'list',
+    scheduleBySet: {
+      'set-1': { create:true, cancel:false, query:false, once:true, cycle:false, grains:{ hour:false, day:false, week:false, month:false }, cmds:[{ name:'灯', code:'light', type:'控制项' }] }
+    },
+    batchTasksBySet: {
+      'set-1': [{ id:'bt-1', name:'任务', status:'已完成', times:5, acc:'26.67%', creator:'jd_40d11979fdb53', createdAt:'2026-08-03 17:01:14' }]
+    },
+    deviceStatePrompt: ''
+  };
+
+  // 每个智能体独立配置的字段
+  const AGENT_CFG_KEYS = ['selectedSkillIds','strategies','customSkills','mcpServices','aiotEnabled','promptType','instructionSets','activeSetId','instructionsBySet','isTaskPlannerEnabled','fillerSentences','expandedSteps','promptDirty','commands','tools','acSetTab','scheduleBySet','batchTasksBySet','deviceStatePrompt'];
+  const AgentConfigStore = {};
+  function acSnapshotAgent(id){
+    if(!id) return;
+    const snap={};
+    AGENT_CFG_KEYS.forEach(k=>{ snap[k]=JSON.parse(JSON.stringify(AC[k])); });
+    AgentConfigStore[id]=snap;
+  }
+  function acDefaultAgentConfig(){
+    return {
+      selectedSkillIds: AC.version==='lite' ? ['music','weather'] : ['music','fangyan','knowledge'],
+      strategies:{ intro:true, push:false, feedback:false, emotion:false },
+      customSkills:[], mcpServices:[], aiotEnabled:false, promptType:'auto',
+      instructionSets:[], activeSetId:null, instructionsBySet:{},
+      isTaskPlannerEnabled:false, fillerSentences:['明白。'],
+      expandedSteps:{ intent:false, planner:false, tool:false, devstate:false }, promptDirty:false, commands:[],
+      tools: JSON.parse(JSON.stringify(AC.tools||[])),
+      acSetTab:'list', scheduleBySet:{}, batchTasksBySet:{}, deviceStatePrompt:''
+    };
+  }
+  function acLoadAgent(id){
+    const cfg = AgentConfigStore[id] || acDefaultAgentConfig();
+    AGENT_CFG_KEYS.forEach(k=>{ if(cfg[k]!==undefined) AC[k]=JSON.parse(JSON.stringify(cfg[k])); });
+  }
+  function acSwitchAgent(id){ acSnapshotAgent(AC.activeAgentId); AC.activeAgentId=id; acLoadAgent(id); }
+
+  function acInit() {
+    const data = State.currentAppData || {};
+    AC.version = State.currentAppVersion || data.productVersion || 'lite';
+    AC.selectedSkillIds = AC.version === 'lite' ? ['music','weather'] : ['music','fangyan','knowledge'];
+    // 首次初始化：把当前默认智能体的初始配置存入 store，作为主智能体的独立配置
+    if(!AgentConfigStore[AC.activeAgentId]) acSnapshotAgent(AC.activeAgentId);
+  }
+  function acActiveAgent(){ return AC.agents.find(a=>a.id===AC.activeAgentId) || AC.agents[0]; }
+  function acRender(){ renderApp(); }
+  function acSaveToast(msg){ showToast(msg, 2400); }
+  function acSetToast(msg){ showToast(msg, 1800); }
+
+  /* ---------- 顶部合并区 ---------- */
+  function acHeaderHtml(){
+    const data = State.currentAppData || {};
+    const std = AC.version === 'standard';
+    const stdFields = [
+      ['产品描述', data.desc],['产品型号', data.productType],['开发板ID', data.devBoardId],
+      ['开发板类型', data.devBoardType],['序列号前缀', data.serialPrefix],['型号描述', data.typeDesc],
+      ['产品品类', data.productCategory],['产品部件', data.productPart],['IoT平台', data.iotPlatform||'端侧设备']
+    ];
+    const liteFields = [
+      ['产品描述', data.desc],['产品型号', data.productType],['开发板ID', data.devBoardId],
+      ['开发板类型', data.devBoardType],['序列号前缀', data.serialPrefix]
+    ];
+    const fields = std ? stdFields : liteFields;
+    const fieldsHtml = fields.map(f=>`<div class="w-1/5 px-[8px] mb-[8px] flex items-center"><span class="text-[12px] text-[#999] mr-[6px] shrink-0">${f[0]}:</span><span class="text-[12px] text-[#333] truncate">${f[1]||'-'}</span></div>`).join('');
+    const expanded = AC.productInfoExpanded;
+    return `
+    <div class="bg-white border-b border-[#e5e5e5] shrink-0 relative z-20 shadow-sm">
+      <div class="px-[24px] py-[16px] flex items-center flex-wrap gap-y-[8px]" style="height:60px">
+        <span class="text-[14px] text-[#999] cursor-pointer hover:text-[#1473e6] flex items-center" data-ac-go-index><i class="fas fa-th-large mr-[6px] text-[13px]"></i>产品管理</span>
+        <span class="mx-[8px] text-[#ccc] text-[14px]">/</span>
+        <h1 class="text-[20px] font-bold text-[#333] mr-[12px]">${data.name||'-'}</h1>
+        <span class="text-[14px] text-[#999] mr-[12px]">APPID: ${data.id||'-'}</span>
+        <span class="px-[8px] py-[2px] bg-[#eef5fd] text-[#1473e6] border border-[#91d5ff] rounded-[4px] text-[12px] mr-[12px]">${std?'标准版':'lite版'}</span>
+        <div class="ml-auto flex items-center gap-[16px]">
+          <button class="w-[32px] h-[32px] flex items-center justify-center border border-[#d9d9d9] rounded-[4px] text-[#666] hover:bg-[#f5f5f5]"><i class="far fa-clock text-[14px]"></i></button>
+          <button class="h-[32px] px-[16px] bg-[#1473e6] text-white rounded-[4px] text-[14px] hover:bg-[#115ebb] flex items-center"><i class="fas fa-plus mr-[4px]"></i>发布</button>
+        </div>
+      </div>
+      ${expanded ? `
+      <div class="px-[24px] pb-[16px]">
+    <div class="pt-[4px] pb-[12px]">
+          <div class="flex flex-wrap -mx-[8px]">${fieldsHtml}</div>
+        </div>
+        <div class="flex items-center gap-[8px] flex-wrap border-t border-[#f4f4f4] pt-[12px]">
+          <button data-ac-hotword class="h-[28px] px-[12px] bg-white border border-[#1473e6] text-[#1473e6] rounded-[4px] text-[12px] hover:bg-[#eef5fd] flex items-center">语音热词编辑</button>
+          <button class="h-[28px] px-[12px] bg-white border border-[#1473e6] text-[#1473e6] rounded-[4px] text-[12px] hover:bg-[#eef5fd] flex items-center">记忆策略配置</button>
+          <button class="h-[28px] px-[12px] bg-white border border-[#1473e6] text-[#1473e6] rounded-[4px] text-[12px] hover:bg-[#eef5fd] flex items-center">声纹配置</button>
+          ${std?`<button class="h-[28px] px-[12px] bg-white border border-[#1473e6] text-[#1473e6] rounded-[4px] text-[12px] hover:bg-[#eef5fd] flex items-center">可控产品配置</button>`:''}
+        </div>
+      </div>`:''}
+      <button type="button" data-ac-toggle-info class="absolute bottom-[-10px] left-1/2 -translate-x-1/2 w-[64px] h-[20px] bg-white border border-[#e5e5e5] rounded-[10px] flex items-center justify-center cursor-pointer text-[#999] hover:text-[#1473e6] hover:border-[#1473e6] shadow-sm z-30">
+        <i class="fas ${expanded?'fa-chevron-up':'fa-chevron-down'} text-[10px] mr-[4px]"></i><span class="text-[10px]">${expanded?'收起':'展开'}</span>
+      </button>
+    </div>`;
+  }
+
+  /* ---------- 智能体 Tab 栏 ---------- */
+  function acAgentTabHtml(){
+    const sorted = [...AC.agents].sort((a,b)=> (a.id===AC.activeAgentId?-1:0) - (b.id===AC.activeAgentId?-1:0));
+    const cards = sorted.map(a=>{
+      const active = a.id===AC.activeAgentId;
+      return `<div class="shrink-0 h-[36px] px-[14px] mr-[8px] rounded-[6px] border flex items-center cursor-pointer text-[13px] ${active?'border-[#1473e6] bg-[#eef5fd] text-[#1473e6]':'border-[#e5e5e5] bg-white text-[#333] hover:border-[#1473e6]'}" data-ac-agent="${a.id}">
+        <span class="truncate max-w-[120px]">${a.name}</span>
+        ${a.isDefault?`<span class="ml-[6px] px-[4px] py-[1px] bg-[#f6ffed] text-[#52c41a] border border-[#b7eb8f] rounded-[2px] text-[11px]">默认</span>`:''}
+      </div>`;
+    }).join('');
+    const canCreate = AC.agents.length < 10;
+    const createCard = `<div class="shrink-0 h-[36px] px-[14px] rounded-[6px] border border-dashed flex items-center text-[13px] ${canCreate?'border-[#1473e6] text-[#1473e6] cursor-pointer hover:bg-[#eef5fd]':'border-[#d9d9d9] text-[#ccc] cursor-not-allowed'}" ${canCreate?'data-ac-agent-create':''}><i class="fas fa-plus mr-[4px] text-[12px]"></i>${canCreate?'新建':'已达上限'}</div>`;
+    return `<div class="shrink-0 h-[60px] flex items-center px-[24px] bg-white border-b border-[#f0f0f0] overflow-x-auto">${cards}${createCard}</div>`;
+  }
+
+  /* ---------- 全局人设区 ---------- */
+  function acPersonaHtml(){
+    const a = acActiveAgent();
+    return `
+    <div class="mb-[32px]">
+      <div class="flex items-center text-[13px] mb-[12px] pr-[120px]">
+        <span class="text-[#999] mr-[6px]">当前编辑:</span>
+        <span class="text-[#1473e6] font-medium truncate max-w-[120px]">${a?a.name:'-'}</span>
+        <div class="ml-[12px] flex items-center gap-[8px]">
+          ${a && !a.isDefault?`<button data-ac-agent-setdefault="${a.id}" class="h-[22px] px-[8px] rounded-[4px] text-[12px] text-[#999] hover:bg-[#eef5fd] hover:text-[#1473e6]">设默认</button>`:''}
+          <button data-ac-agent-rename="${a?a.id:''}" class="w-[22px] h-[22px] flex items-center justify-center text-[#999] hover:text-[#1473e6] hover:bg-[#eef5fd] rounded-[4px]"><i class="fas fa-pen text-[10px]"></i></button>
+          ${AC.agents.length>1 && a && !a.isDefault?`<button data-ac-agent-delete="${a.id}" class="w-[22px] h-[22px] flex items-center justify-center text-[#999] hover:text-[#e1251b] hover:bg-[#fff1f0] rounded-[4px]"><i class="fas fa-trash-alt text-[10px]"></i></button>`:''}
+        </div>
+        <span class="text-[#999] ml-[12px] text-[12px]">Agent ID: ${a?a.id:'-'}</span>
+      </div>
+      <div class="flex items-center mb-[16px]">
+        <h2 class="text-[16px] font-medium text-[#333] mr-[12px]">全局人设</h2>
+        <span class="text-[14px] text-[#666]">音色: <span class="inline-block px-[8px] py-[2px] bg-[#eef5fd] text-[#1473e6] rounded-[4px] text-[12px]">小犀</span></span>
+      </div>
+      <div class="border border-[#e5e5e5] rounded-[4px] p-[16px] bg-[#fcfcfc] text-[14px] text-[#666] font-mono leading-relaxed">
+        <p class="text-[#1473e6] font-medium"># 角色设定</p>
+        <p class="text-[#1473e6] mt-[8px]">## 1. 基本信息</p>
+        <ul class="list-none pl-[8px]">
+          <li>- 姓名: <span class="bg-[#eef5fd] text-[#999] px-[4px] rounded">输入角色姓名或昵称</span></li>
+          <li>- 背景设定: <span class="bg-[#eef5fd] text-[#999] px-[4px] rounded">输入种族或背景设定</span></li>
+          <li>- 身份: <span class="bg-[#eef5fd] text-[#999] px-[4px] rounded">输入身份设定信息</span></li>
+          <li>- MBTI: <span class="bg-[#eef5fd] text-[#999] px-[4px] rounded">输入MBTI设定信息</span></li>
+        </ul>
+        <p class="text-[#1473e6] mt-[8px]">## 2. 性格气质</p>
+      <ul class="list-none pl-[8px]"><li>- <span class="bg-[#eef5fd] text-[#999] px-[4px] rounded">输入性格设定信息，可换行新增</span></li></ul>
+        <p class="text-[#1473e6] mt-[8px]">## 3. 语言表达风格</p>
+        <ul class="list-none pl-[8px]"><li>- <span class="bg-[#eef5fd] text-[#999] px-[4px] rounded">输入语言表达风格，可换行新增</span></li></ul>
+      </div>
+    </div>`;
+  }
+
+  /* ---------- 技能区 ---------- */
+  function acSkillsHtml(){
+    const lite = AC.version === 'lite';
+    const dropdown = AC.skillDropdownOpen ? `
+      <div class="fixed inset-0 z-10" data-ac-skill-mask></div>
+      <div class="absolute top-[28px] left-[52px] w-[240px] bg-white border border-[#e5e5e5] rounded-[8px] shadow-lg z-20 py-[8px] max-h-[400px] overflow-y-auto">
+        <div class="px-[16px] py-[8px] flex items-center text-[14px] text-[#333] font-medium"><i class="fas fa-caret-down mr-[4px] text-[#999]"></i> 系统技能</div>
+        ${ALL_SKILLS.filter(s=>lite?s.lite:s.standard).map(s=>{
+          const sel = AC.selectedSkillIds.includes(s.id);
+          return `<div class="px-[36px] py-[10px] text-[14px] cursor-pointer hover:bg-[#f5f5f5] ${sel?'bg-[#eef5fd] text-[#1473e6]':'text-[#333]'}" data-ac-skill-toggle="${s.id}">${s.name}</div>`;
+        }).join('')}
+        ${!lite?`<div class="mt-[6px] pt-[6px] border-t border-[#f0f0f0]"><div class="px-[16px] py-[10px] text-[14px] text-[#1473e6] cursor-pointer hover:bg-[#f5f5f5] flex items-center" data-ac-custom-skill><i class="fas fa-plus mr-[6px] text-[12px]"></i>添加自定义技能</div></div>`:''}
+      </div>`:'';
+    const chips = AC.selectedSkillIds.map(id=>{
+      const s = ALL_SKILLS.find(x=>x.id===id); if(!s) return '';
+      const showEdit = AC.version!=='lite' || s.name==='知识问答';
+      return `<div class="flex items-center px-[12px] py-[6px] border border-[#e5e5e5] rounded-[4px] bg-white"><span class="text-[14px] text-[#333] mr-[8px]">${s.name}</span><span class="bg-[#eef5fd] text-[#1473e6] text-[12px] px-[4px] py-[2px] rounded-[2px] mr-[8px]">官方</span>${showEdit?`<i class="fas fa-pen text-[#999] text-[12px] cursor-pointer hover:text-[#1473e6]"></i>`:''}</div>`;
+    }).join('');
+    const customChips = AC.customSkills.map(cs=>`<div class="flex items-center px-[12px] py-[6px] border border-[#e5e5e5] rounded-[4px] bg-white"><span class="text-[14px] text-[#333] mr-[8px]">${cs.name}</span><span class="bg-[#f6ffed] text-[#52c41a] border border-[#b7eb8f] text-[12px] px-[4px] py-[2px] rounded-[2px] mr-[8px]">自定义</span><i class="fas fa-times text-[#999] text-[12px] cursor-pointer hover:text-[#e1251b]" data-ac-custom-remove="${cs.id}"></i></div>`).join('');
+    const empty = AC.selectedSkillIds.length===0 && AC.customSkills.length===0 ? `<span class="text-[14px] text-[#999] py-[4px]">暂无技能，请添加</span>`:'';
+    return `
+    <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
+      <div class="flex items-center mb-[16px] relative">
+        <h2 class="text-[16px] font-medium text-[#333] mr-[16px]">技能</h2>
+        <span class="text-[#1473e6] text-[14px] cursor-pointer hover:underline mr-[16px]" data-ac-skill-add><i class="fas fa-plus mr-[4px]"></i>添加技能</span>
+        ${dropdown}
+      </div>
+      <div class="flex flex-wrap gap-[12px]">${chips}${customChips}${empty}</div>
+    </div>`;
+  }
+
+  /* ---------- MCP服务区（lite版）---------- */
+  function acMcpHtml(){
+    if(State.currentAppVersion!=='lite') return '';
+    const items = AC.mcpServices.map(m=>`
+      <div class="flex items-center justify-between px-[16px] py-[12px] border border-[#f0f0f0] rounded-[8px] mb-[12px]">
+        <div class="flex items-center">
+          <i class="fas fa-plug text-[#1473e6] mr-[12px]"></i>
+          <div>
+            <div class="text-[14px] text-[#333]">${m.name}</div>
+            <div class="text-[12px] text-[#999]">${m.url}</div>
+          </div>
+        </div>
+        <i class="fas fa-times text-[#999] cursor-pointer hover:text-[#ff4d4f]" data-ac-mcp-remove="${m.id}"></i>
+      </div>`).join('');
+    return `
+    <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
+      <div class="flex items-center mb-[16px]">
+        <h2 class="text-[16px] font-medium text-[#333] mr-[16px]">MCP服务</h2>
+        <span class="text-[#1473e6] text-[14px] cursor-pointer hover:underline" data-ac-mcp-add><i class="fas fa-plus mr-[4px]"></i>添加MCP服务</span>
+      </div>
+      ${items || '<span class="text-[14px] text-[#999]">暂无MCP服务</span>'}
+    </div>`;
+  }
+
+  /* ---------- 指令区（standard版）---------- */
+  function acCommandsHtml(){
+    if(State.currentAppVersion!=='standard') return '';
+    const cards = AC.commands.map(c=>`
+      <div class="inline-flex items-center px-[16px] py-[12px] mr-[12px] mb-[12px] border border-[#e5e5e5] rounded-[8px] cursor-pointer hover:border-[#1473e6] group" data-ac-cmd="${c.id}">
+        <span class="text-[14px] text-[#333]">${c.name}</span>
+        <span class="ml-[10px] px-[8px] py-[2px] text-[12px] text-[#52c41a] bg-[#f6ffed] border border-[#b7eb8f] rounded-[4px]">${c.type}</span>
+        <i class="fas fa-times ml-[10px] text-[#ccc] opacity-0 group-hover:opacity-100 hover:text-[#ff4d4f]" data-ac-cmd-del="${c.id}"></i>
+      </div>`).join('');
+    return `
+    <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
+      <div class="flex items-center mb-[16px]">
+        <h2 class="text-[16px] font-medium text-[#333] mr-[16px]">指令</h2>
+        <span class="text-[14px] text-[#1473e6] cursor-pointer" data-ac-cmd-add><i class="fas fa-plus mr-[4px]"></i>添加指令</span>
+      </div>
+      <div class="flex flex-wrap">${cards}</div>
+    </div>`;
+  }
+
+  /* ---------- AIoT指令控制区（standard版）---------- */
+  function acAiotHtml(){
+    if(State.currentAppVersion!=='standard') return '';
+    const enabled = AC.aiotEnabled;
+    const promptRadio = (val,label)=>`
+      <label class="flex items-center cursor-pointer mr-[32px]">
+        <input type="radio" name="ac-prompt" class="mr-[8px]" ${AC.promptType===val?'checked':''} data-ac-prompt="${val}">
+        <span class="text-[14px] text-[#333]">${label}</span>
+      </label>`;
+    // 指令集按钮栏
+    const setBtns = AC.instructionSets.map(s=>`
+      <span class="relative inline-flex items-center px-[14px] py-[6px] rounded-[6px] text-[13px] cursor-pointer mr-[8px] mb-[8px] group bg-[#f5f5f5] text-[#333]" data-ac-set="${s.id}">
+        ${s.name}
+        <i class="fas fa-times ml-[6px] opacity-0 group-hover:opacity-100 hover:text-[#ff4d4f]" data-ac-set-del="${s.id}"></i>
+      </span>`).join('');
+    const setBar = AC.promptType==='auto' ? `
+      <div class="mt-[12px] flex flex-wrap items-center">
+        ${setBtns}
+        <span class="inline-flex items-center px-[14px] py-[6px] rounded-[6px] text-[13px] cursor-pointer mb-[8px] border border-dashed border-[#1473e6] text-[#1473e6]" data-ac-set-create><i class="fas fa-plus mr-[4px]"></i>新建指令集</span>
+      </div>`:'';
+    // 垫句区
+    const fillers = AC.fillerSentences.map((f,i)=>`
+      <div class="flex items-center mb-[8px]">
+        <input class="flex-1 h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" value="${f}" data-ac-filler-idx="${i}">
+        <i class="fas fa-trash-alt ml-[8px] text-[#999] cursor-pointer hover:text-[#ff4d4f]" data-ac-filler-del="${i}"></i>
+      </div>`).join('');
+    const fillerBox = AC.isTaskPlannerEnabled ? `
+      <div class="p-[16px] bg-[#f4f8ff] rounded-[8px] mt-[16px]">
+        <div class="text-[14px] text-[#333] mb-[12px]">垫句（最多5条）</div>
+        ${fillers}
+        <span class="text-[#1473e6] text-[13px] cursor-pointer" data-ac-filler-add><i class="fas fa-plus mr-[4px]"></i>添加垫句</span>
+      </div>`:'';
+    // 三步流程：示例提示词
+    const EXAMPLES = {
+      intent: '你是一个中文智能家居设备控制意图二分类器。\n基于【历史对话】【候选控制指令列表】【当前 query】，判断用户最新一句话是否属于"设备控制意图"。',
+      planner: '# Role \n\n你是东东，京东开发的智能灯语音助手。你需要根据设备能力清单与取值范围，\n判断用户当前指令**能否在【设备能力】内直接执行**，并按下方判定规则给出 plan 决策。',
+      tool: '# Role \\n你是东东，京东开发的智能灯语音助手。你的任务是分析用户的自然语言指令，理解其意图，并严格输出对应的JSON。'
+    };
+    const hasSet = AC.instructionSets.length > 0;
+    const isAuto = AC.promptType === 'auto';
+    // 三步流程
+    const step = (key,title,desc)=>{
+      let inner = '';
+      const isTool = key==='tool';
+      const toolBar = isTool ? `<div class="flex items-center justify-between mb-[8px]">
+            <span class="text-[12px] text-[#999]">工具执行层提示词支持使用系统工具，暂不支持自定义工具</span>
+            <span class="text-[#1473e6] text-[13px] cursor-pointer shrink-0 ml-[12px]" data-ac-tool-add><i class="fas fa-plus mr-[4px]"></i>添加工具</span>
+          </div>`:'';
+      if(AC.expandedSteps[key]){
+        if(isAuto && !hasSet){
+          // 根据指令集生成但无指令集：不可编辑 + 框内灰色提示
+          inner = `<div class="px-[16px] pb-[16px]">
+            <textarea class="w-full h-[80px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] bg-[#f5f5f5] text-[#999] cursor-not-allowed" disabled placeholder="当前模式下提示词由指令集生成，请新建指令集或者选择自定义提示词实现设备控制"></textarea>
+          </div>`;
+        } else if(isAuto && hasSet){
+          // 根据指令集生成且有指令集：填入示例，可编辑
+          inner = `<div class="px-[16px] pb-[16px]">${toolBar}
+            <textarea ${isTool?'data-ac-tool-target':''} class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6]">${EXAMPLES[key]||''}</textarea>
+          </div>`;
+        } else {
+          // 自定义提示词：为空可输入
+          inner = `<div class="px-[16px] pb-[16px]">${toolBar}
+            <textarea ${isTool?'data-ac-tool-target':''} class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6]" placeholder="请输入提示词"></textarea>
+          </div>`;
+        }
+      }
+      return `
+      <div class="border border-[#f0f0f0] rounded-[8px] mb-[12px]">
+        <div class="flex items-center justify-between px-[16px] py-[12px] cursor-pointer" data-ac-step="${key}">
+          <div class="pr-[12px]">
+            <div class="text-[14px] text-[#333]">${title}</div>
+            ${desc?`<div class="text-[12px] text-[#999] mt-[2px] leading-[1.5]">${desc}</div>`:''}
+          </div>
+          <i class="fas fa-chevron-${AC.expandedSteps[key]?'up':'down'} text-[#999] shrink-0"></i>
+        </div>
+        ${inner}
+      </div>`;
+    };
+    const flow = `
+      <div class="mt-[16px]">
+        ${step('intent','1. 意图准入判断','判断用户请求是否属于设备控制意图')}
+        ${AC.isTaskPlannerEnabled?step('planner','2. 任务规划器','完成设备能力匹配、参数校验、澄清与闲聊分流，并生成任务规划。简单控制（仅单步控制，无需多轮澄清）可关闭任务规划器，可提高响应速度'):''}
+        ${step('tool',(AC.isTaskPlannerEnabled?'3':'2')+'. 工具执行','将任务转化为可执行的标准工具调用')}
+      </div>`;
+    // 设备上行状态：翻译后的状态提示词，喂给总系统提示词（可展开收起框）
+    const dsVal = AC.deviceStatePrompt || '';
+    const dsInner = AC.expandedSteps.devstate ? `
+        <div class="px-[16px] pb-[16px]">
+          <div class="flex items-center justify-end mb-[8px]">
+            <span class="text-[#1473e6] text-[13px] cursor-pointer shrink-0" data-ac-devstate-edit><i class="fas fa-cog mr-[4px]"></i>解析并配置翻译</span>
+          </div>
+          <textarea class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] font-mono leading-[1.6] bg-[#f7f8fa]" readonly placeholder="点击右上角「解析并配置翻译」，配置完成后翻译模板将写入此处" data-ac-devstate-box>${dsVal}</textarea>
+        </div>`:'';
+    const deviceStateBox = `
+      <div class="mt-[16px] border border-[#f0f0f0] rounded-[8px]">
+        <div class="flex items-center justify-between px-[16px] py-[12px] cursor-pointer" data-ac-step="devstate">
+          <div class="pr-[12px]">
+            <div class="text-[14px] text-[#333]">${AC.isTaskPlannerEnabled?'4':'3'}. 设备上行状态</div>
+            <div class="text-[12px] text-[#999] mt-[2px] leading-[1.5]">设备上报状态翻译成的自然语言，会并入系统提示词供模型理解设备状态</div>
+          </div>
+          <i class="fas fa-chevron-${AC.expandedSteps.devstate?'up':'down'} text-[#999] shrink-0"></i>
+        </div>
+      ${dsInner}
+      </div>`;
+    const dirtyBanner = (AC.promptDirty && isAuto && hasSet) ? `
+      <div class="flex items-center justify-between px-[16px] py-[10px] mt-[16px] bg-[#fffbe6] border border-[#ffe58f] rounded-[8px]">
+        <div class="flex items-center text-[13px] text-[#664d00]">
+          <i class="fas fa-exclamation-circle text-[#faad14] mr-[8px]"></i>
+          监测到指令已更新，是否同步更新提示词，更新会全量刷新并覆盖已编辑内容，重要修改建议复制备份
+        </div>
+        <div class="flex items-center shrink-0 ml-[16px]">
+          <span class="text-[13px] text-[#1473e6] cursor-pointer mr-[16px]" data-ac-prompt-backup>复制备份</span>
+          <span class="px-[12px] py-[4px] text-[13px] text-white bg-[#165DFF] rounded-[6px] cursor-pointer" data-ac-prompt-update>更新提示词</span>
+        </div>
+      </div>`:'';
+    const body = enabled ? `
+      <div class="mt-[16px]">
+        <div class="flex items-center">
+          ${promptRadio('auto','根据指令集生成')}
+          ${promptRadio('custom','自定义提示词')}
+        </div>
+        ${setBar}
+        ${dirtyBanner}
+        <div class="flex items-center justify-between mt-[20px] pt-[16px] border-t border-[#f0f0f0]">
+          <div class="flex items-center">
+            <span class="text-[14px] text-[#333] mr-[12px]">任务规划器</span>
+            ${switchHtml('ac-planner', AC.isTaskPlannerEnabled)}
+          </div>
+          <span class="text-[#1473e6] text-[13px] cursor-pointer" data-ac-tutorial><i class="fas fa-book mr-[4px]"></i>编写教程</span>
+        </div>
+        ${fillerBox}
+        ${flow}
+        ${deviceStateBox}
+      </div>`:'';
+    return `
+    <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
+      <div class="flex items-center justify-between mb-[16px]">
+        <h2 class="text-[16px] font-medium text-[#333]">AIoT指令控制</h2>
+        <div class="flex items-center"><span class="text-[13px] text-[#666] mr-[12px]">开启AIoT</span>${switchHtml('ac-aiot', enabled)}</div>
+      </div>
+      ${body}
+    </div>`;
+  }
+
+  /* ---------- 设备上行状态：解析 JSON + 配置翻译表格 弹窗 ---------- */
+  function acDeviceStateModal(){
+    // 预置演示回填（实际由运营配置）
+    const preset = {
+      bedsteadStatus:{ name:'预设模式', type:'enum', map:{'1':'坐姿','2':'平躺模式','3':'零重力'} },
+      underBedLight: { name:'床底灯',   type:'switch', map:{'0':'关闭','1':'开启'} },
+      volume:        { name:'音量大小', type:'num' }
+    };
+    const defaultJson = `{\n  "bedsteadStatus": 2,\n  "underBedLight": 1,\n  "volume": 60,\n  "backAngle": 12,\n  "airPressureLevel": 3\n}`;
+    let rows = [];
+    const esc = v => String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    const html = `
+      <div class="w-[880px] max-h-[86vh] bg-white rounded-[8px] shadow-xl flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
+          <div>
+            <h3 class="text-[16px] font-medium text-[#333]">设备状态翻译配置</h3>
+            <p class="text-[12px] text-[#999] mt-[2px]">独立于指令集，只消费设备上行状态 JSON：①解析上行 JSON → ②配置标识含义与值类型 → 生成翻译模板并写回（模板含 {{ data.xxx }} 占位，工程执行时按实时状态渲染）</p>
+          </div>
+          <i class="fas fa-times text-[#999] cursor-pointer hover:text-[#333]" data-ds-close></i>
+        </div>
+        <div class="flex-1 overflow-y-auto p-[24px]">
+          <div class="border border-[#e5e6eb] rounded-[8px] mb-[16px]">
+            <div class="flex items-center px-[16px] py-[12px] border-b border-[#f2f3f5]">
+              <span class="inline-flex w-[20px] h-[20px] rounded-full bg-[#165dff] text-white text-[12px] items-center justify-center mr-[6px]">1</span>
+              <span class="text-[14px] font-medium text-[#333]">查看并解析上行 JSON</span>
+              <span class="text-[12px] text-[#999] ml-[8px]">设备上报的原始状态数据</span>
+              <button class="ml-auto px-[12px] py-[4px] bg-[#165dff] text-white rounded-[5px] text-[12px]" data-ds-parse>↻ 刷新并解析</button>
+            </div>
+            <div class="p-[16px]">
+              <div class="text-[12px] text-[#999] mb-[4px]">上行状态 JSON（可编辑）</div>
+              <textarea class="w-full h-[150px] p-[10px] border border-[#e5e6eb] rounded-[6px] text-[12px] font-mono leading-[1.6] bg-[#fbfcfd]" data-ds-json>${esc(defaultJson)}</textarea>
+            </div>
+          </div>
+          <div class="border border-[#e5e6eb] rounded-[8px] mb-[16px]">
+            <div class="flex items-center px-[16px] py-[12px] border-b border-[#f2f3f5]">
+              <span class="inline-flex w-[20px] h-[20px] rounded-full bg-[#165dff] text-white text-[12px] items-center justify-center mr-[6px]">2</span>
+              <span class="text-[14px] font-medium text-[#333]">解析后配置表格</span>
+              <span class="text-[12px] text-[#999] ml-[8px]">翻译标识含义 + 识别值类型 / 枚举映射</span>
+            </div>
+            <div class="p-[16px]">
+              <table class="w-full text-[12px]" style="border-collapse:collapse">
+                <thead><tr class="text-[#86909c] bg-[#fafbfc]">
+                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:150px">上行字段</th>
+                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:70px">原始值</th>
+                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:150px">标识含义（显示名）</th>
+                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:110px">值类型</th>
+                  <th class="text-left p-[8px] border-b border-[#f2f3f5]">枚举映射 / 翻译结果</th>
+          </tr></thead>
+                <tbody data-ds-tb></tbody>
+              </table>
+              <div class="text-[11px] text-[#86909c] mt-[8px]">值类型选「枚举/开关」时展开映射表；选「数值/文本」直接取值。</div>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-[12px] px-[24px] py-[16px] border-t border-[#f0f0f0]">
+          <button class="h-[34px] px-[18px] border border-[#d9d9d9] rounded-[6px] text-[14px] text-[#333] hover:bg-[#f5f5f5]" data-ds-close>取消</button>
+          <button class="h-[34px] px-[18px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-ds-gen>生成翻译并写回</button>
+        </div>
+      </div>`;
+
+    const wrap = openModal(html, {});
+    const q = sel => wrap.querySelector(sel);
+    const tb = q('[data-ds-tb]');
+
+    function parseJson(){
+      let data;
+      try { data = JSON.parse(q('[data-ds-json]').value); }
+      catch(e){ showToast('JSON 解析失败：'+e.message); return; }
+      rows = Object.keys(data).map(k=>{
+        const p = preset[k];
+        return { key:k, raw:data[k], name:p?p.name:'', type:p?p.type:'', map:(p&&p.map)?{...p.map}:{} };
+      });
+      render();
+    }
+    function typeSelect(i,type){
+      const opts=[['','请选择'],['enum','枚举'],['num','数值'],['switch','开关'],['text','文本']];
+      return `<select class="w-full border border-[#e5e6eb] rounded-[4px] px-[6px] py-[4px]" data-ds-type="${i}">`+
+        opts.map(o=>`<option value="${o[0]}" ${o[0]===type?'selected':''}>${o[1]}</option>`).join('')+`</select>`;
+    }
+    function valueCell(i,r){
+      if(r.type==='enum'||r.type==='switch'){
+        let h='<div class="p-[8px] rounded-[5px] bg-[#f7faff] border border-dashed border-[#b8d3ff]">';
+        Object.keys(r.map).forEach(code=>{
+          h+=`<div class="flex items-center gap-[6px] mb-[5px]"><input class="border border-[#e5e6eb] rounded-[4px] px-[4px] py-[2px] font-mono" style="max-width:60px" value="${esc(code)}" data-ds-mapcode="${i}" data-ds-old="${esc(code)}"><span class="text-[#86909c]">→</span><input class="flex-1 border border-[#e5e6eb] rounded-[4px] px-[4px] py-[2px]" value="${esc(r.map[code])}" data-ds-mapval="${i}" data-ds-code="${esc(code)}"><span class="text-[#f53f3f] cursor-pointer px-[4px]" data-ds-mapdel="${i}" data-ds-dcode="${esc(code)}">✕</span></div>`;
+        });
+        h+=`<span class="text-[#165dff] text-[11px] cursor-pointer" data-ds-mapadd="${i}">+ 添加映射项</span>`;
+        const hit=r.map[String(r.raw)];
+        h+=`<div class="text-[11px] text-[#86909c] mt-[6px]">当前值 <span class="font-mono">${esc(r.raw)}</span> → <b>${hit||'（未匹配）'}</b></div></div>`;
+        return h;
+      }
+      if(r.type==='num')  return `<div class="text-[11px] text-[#86909c]">直接取值：<b>${esc(r.raw)}</b></div>`;
+      if(r.type==='text') return `<div class="text-[11px] text-[#86909c]">原样透传：<b>${esc(r.raw)}</b></div>`;
+      return `<span class="text-[11px] text-[#86909c]">先选择值类型 →</span>`;
+    }
+    function render(){
+      tb.innerHTML='';
+      rows.forEach((r,i)=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML =
+          `<td class="p-[8px] border-b border-[#f2f3f5] align-top"><span class="font-mono bg-[#f2f3f5] px-[5px] py-[1px] rounded">${esc(r.key)}</span></td>`+
+          `<td class="p-[8px] border-b border-[#f2f3f5] align-top text-[#86909c]">${esc(r.raw)}</td>`+
+          `<td class="p-[8px] border-b border-[#f2f3f5] align-top"><input class="w-full border border-[#e5e6eb] rounded-[4px] px-[6px] py-[4px]" value="${esc(r.name)}" placeholder="如：预设模式" data-ds-name="${i}"></td>`+
+          `<td class="p-[8px] border-b border-[#f2f3f5] align-top">${typeSelect(i,r.type)}</td>`+
+          `<td class="p-[8px] border-b border-[#f2f3f5] align-top">${valueCell(i,r)}</td>`;
+        tb.appendChild(tr);
+      });
+    }
+    // 生成 Jinja2 模板片段：数值/文本直接取值，枚举/开关走 <key>_map 映射
+    function tplExpr(r){
+      if(r.type==='enum'||r.type==='switch') return `{{ ${r.key}_map[data.${r.key} | string] }}`;
+      if(r.type==='num'||r.type==='text')    return `{{ data.${r.key} }}`;
+      return null;
+    }
+
+    wrap.addEventListener('click', e=>{
+      const t=e.target;
+      if(t.closest('[data-ds-close]')){ wrap.remove(); return; }
+      if(t.closest('[data-ds-parse]')){ parseJson(); return; }
+      const add=t.closest('[data-ds-mapadd]'); if(add){ rows[+add.getAttribute('data-ds-mapadd')].map['']=''; render(); return; }
+      const del=t.closest('[data-ds-mapdel]'); if(del){ delete rows[+del.getAttribute('data-ds-mapdel')].map[del.getAttribute('data-ds-dcode')]; render(); return; }
+      if(t.closest('[data-ds-gen]')){
+        const valid = rows.filter(r=>r.name && r.type);
+        // 模板句子：显示名={{ 表达式 }}
+        const tplParts = valid.map(r=>`${r.name}=${tplExpr(r)}`).filter(Boolean);
+        const out = tplParts.length ? '> **当前设备状态**：'+tplParts.join(' ') : '';
+        AC.deviceStatePrompt = out;
+        wrap.remove();
+        if(!tplParts.length) showToast('暂无可生成内容，请先填写显示名并选择值类型');
+        else showToast('翻译模板已写回');
+        renderApp();
+      }
+    });
+    wrap.addEventListener('input', e=>{
+      const t=e.target, i=+t.getAttribute('data-ds-name');
+      if(t.hasAttribute('data-ds-name')){ rows[i].name=t.value; return; }
+      if(t.hasAttribute('data-ds-mapval')){ rows[+t.getAttribute('data-ds-mapval')].map[t.getAttribute('data-ds-code')]=t.value; return; }
+    });
+    wrap.addEventListener('change', e=>{
+      const t=e.target;
+      if(t.hasAttribute('data-ds-type')){
+        const i=+t.getAttribute('data-ds-type'); rows[i].type=t.value;
+        if((t.value==='enum'||t.value==='switch') && Object.keys(rows[i].map).length===0){
+          rows[i].map = t.value==='switch' ? {'0':'关闭','1':'开启'} : {[String(rows[i].raw)]:''};
+        }
+        render(); return;
+      }
+      if(t.hasAttribute('data-ds-mapcode')){
+        const i=+t.getAttribute('data-ds-mapcode'), oldC=t.getAttribute('data-ds-old'), newC=t.value;
+        if(newC!==oldC){ const v=rows[i].map[oldC]; delete rows[i].map[oldC]; rows[i].map[newC]=v; render(); }
+        return;
+      }
+    });
+    parseJson();
+  }
+
+  /* ---------- 交互策略区 ---------- */
+  function acStrategyHtml(){
+    const row = (key,label,show)=>{
+      if(!show) return '';
+      return `
+      <div class="flex items-center justify-between px-[16px] py-[14px] border border-[#f0f0f0] rounded-[8px] mb-[12px]">
+        <span class="text-[14px] text-[#333]">${label}</span>
+        <div class="flex items-center">
+          <i class="fas fa-pen text-[#999] cursor-pointer mr-[16px] hover:text-[#1473e6]" data-ac-strat-edit="${key}"></i>
+          ${switchHtml('ac-strat-'+key, AC.strategies[key])}
+        </div>
+      </div>`;
+    };
+    return `
+    <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
+      <div class="flex items-center mb-[16px]"><h2 class="text-[16px] font-medium text-[#333]">交互策略</h2></div>
+      ${row('intro','开场白', State.currentAppVersion==='standard')}
+      ${row('push','静默推送', true)}
+      ${row('feedback','事件反馈', true)}
+      ${row('emotion','情绪策略', true)}
+    </div>`;
+  }
+
+  /* ---------- 主渲染函数 ---------- */
+  window.Pages.appConfig = function(){
+    acInit();
+    const scrollArea = `
+      <div class="flex-1 flex flex-col overflow-hidden">
+        ${acAgentTabHtml()}
+        <div class="flex-1 overflow-y-auto p-[24px]" id="ac-scroll">
+          ${AC.saveToast?`<div class="mb-[16px] px-[16px] py-[10px] rounded-[6px] bg-[#f6ffed] border border-[#b7eb8f] text-[#52c41a] text-[14px]">${AC.saveToast}</div>`:''}
+          <div class="relative bg-white rounded-[8px] p-[24px] shadow-sm">
+            <button class="absolute top-[24px] right-[24px] px-[16px] h-[32px] bg-[#1473e6] text-white text-[13px] rounded-[6px]" data-ac-save-draft>保存草稿</button>
+            ${acPersonaHtml()}
+            ${acSkillsHtml()}
+            ${acMcpHtml()}
+            ${acCommandsHtml()}
+            ${acAiotHtml()}
+            ${acStrategyHtml()}
+          </div>
+        </div>
+      </div>`;
+    const preview = `
+      <div class="w-[360px] flex-shrink-0 border-l border-[#f0f0f0] bg-white flex flex-col items-center justify-center">
+        <i class="fas fa-robot text-[48px] text-[#d9d9d9] mb-[16px]"></i>
+        <div class="text-[14px] text-[#999] mb-[16px]">和我对话试试吧</div>
+        <button class="px-[24px] h-[36px] bg-[#1473e6] text-white text-[14px] rounded-[6px]">开始测试</button>
+      </div>`;
+    const content = `
+      <div class="flex flex-col h-full">
+        ${acHeaderHtml()}
+        <div class="flex-1 flex overflow-hidden bg-[#f5f6fa]">
+          ${scrollArea}
+          ${preview}
+        </div>
+      </div>`;
+    return content;
+  };
+
+  /* ================= 弹窗/抽屉 ================= */
+  function acHotWordModal(){
+    openModal(`
+      <div class="w-[800px] bg-white rounded-[8px] shadow-xl overflow-hidden">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
+          <h3 class="text-[16px] font-medium">语音热词编辑</h3>
+          <i class="fas fa-times text-[#999] cursor-pointer" data-close></i>
+        </div>
+        <div class="p-[24px]">
+          <div class="flex items-center mb-[16px] gap-[12px]">
+            <span class="text-[14px] text-[#666]">音频格式:</span>
+            <select class="h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]"><option>pcm</option></select>
+            <span class="text-[#1473e6] text-[13px] cursor-pointer">模板下载</span>
+            <span class="text-[#1473e6] text-[13px] cursor-pointer">批量导入</span>
+            <input class="ml-auto h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="搜索热词">
+            <span class="text-[#1473e6] text-[13px] cursor-pointer">文件导出</span>
+          </div>
+          <table class="w-full text-[13px] border border-[#f0f0f0]">
+            <thead class="bg-[#fafafa]"><tr><th class="p-[10px] text-left">热词</th><th class="p-[10px] text-left">操作</th></tr></thead>
+            <tbody><tr class="border-t border-[#f0f0f0]"><td class="p-[10px]">JoyInside</td><td class="p-[10px]"><span class="text-[#ff4d4f] cursor-pointer">删除</span></td></tr></tbody>
+   </table>
+          <div class="text-[12px] text-[#999] mt-[12px]">共1条</div>
+        </div>
+        <div class="flex justify-end gap-[12px] px-[24px] py-[16px] border-t border-[#f0f0f0]">
+          <button class="h-[32px] px-[16px] border border-[#d9d9d9] rounded-[6px] text-[13px]" data-close>取消</button>
+          <button class="h-[32px] px-[16px] bg-[#1473e6] text-white rounded-[6px] text-[13px]" data-close>确定</button>
+        </div>
+      </div>`, { onMount:(w)=>{ w.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>w.remove())); } });
+  }
+
+  function acStratDrawer(key){
+    const titleMap = { intro:'开场白配置', push:'静默推送配置', feedback:'事件反馈配置', emotion:'情绪策略配置' };
+    const bodyMap = {
+      intro:`<div class="p-[12px] bg-[#eef5fd] text-[#1473e6] text-[13px] rounded-[6px] mb-[16px]">最多可添加5条欢迎语轮播</div>
+        <textarea class="w-full h-[80px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="请输入欢迎语（0/40）"></textarea>
+        <span class="text-[#1473e6] text-[13px] cursor-pointer inline-block mt-[8px]"><i class="fas fa-plus mr-[4px]"></i>添加</span>`,
+      push:`<div class="mb-[16px]"><div class="text-[14px] text-[#333] mb-[8px]">推送时间段</div><input class="w-full h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" value="10:00-15:00" readonly></div>
+        <div class="mb-[16px]"><div class="text-[14px] text-[#333] mb-[8px]">静默推送时间阈值</div><div class="flex gap-[12px]"><input class="flex-1 h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" value="第1次: 5秒"><input class="flex-1 h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" value="第2次: 10秒"></div></div>
+        <label class="flex items-center text-[13px]"><input type="radio" name="push-p" checked class="mr-[8px]">系统内置提示词</label>
+        <label class="flex items-center text-[13px] mt-[12px]"><input type="checkbox" class="mr-[8px]">自动拼接全局人设</label>`,
+      feedback:`<div class="p-[12px] bg-[#eef5fd] text-[#1473e6] text-[13px] rounded-[6px] mb-[16px]">配置事件反馈提示词</div>
+        <div class="w-full h-[300px] p-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px] text-[#666] font-mono bg-[#fcfcfc] overflow-y-auto">自定义提示词只读展示区</div>`,
+      emotion:`<div class="mb-[16px]"><div class="text-[14px] text-[#333] mb-[8px]">情绪定义</div><label class="flex items-center text-[13px]"><input type="radio" name="emo" checked class="mr-[8px]">系统默认</label></div>
+        <div class="flex flex-wrap gap-[8px] mb-[16px]">${['平静','开心','恐惧','悲伤','厌恶','愤怒','震惊'].map(t=>`<span class="px-[10px] py-[4px] rounded-[4px] text-[12px] bg-[#eef5fd] text-[#1473e6]">${t}</span>`).join('')}</div>
+        <div class="text-[14px] text-[#333] mb-[8px]">情绪下发</div>
+        <label class="flex items-center text-[13px] mb-[8px]"><input type="checkbox" checked class="mr-[8px]">表情</label>
+        <label class="flex items-center text-[13px]"><input type="checkbox" checked class="mr-[8px]">语音语调</label>`
+    };
+    openDrawer(`
+      <div class="flex flex-col h-full">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
+          <h3 class="text-[16px] font-medium">${titleMap[key]}</h3>
+          <i class="fas fa-times text-[#999] cursor-pointer" data-close></i>
+        </div>
+        <div class="flex-1 overflow-y-auto p-[24px]">${bodyMap[key]}</div>
+        <div class="flex justify-end gap-[12px] px-[24px] py-[16px] border-t border-[#f0f0f0]">
+          <button class="h-[32px] px-[16px] border border-[#d9d9d9] rounded-[6px] text-[13px]" data-close>取消</button>
+          <button class="h-[32px] px-[16px] bg-[#1473e6] text-white rounded-[6px] text-[13px]" data-close>确定</button>
+        </div>
+      </div>`, { widthClass:'w-[600px]', onMount:(w)=>{ w.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>w.remove())); } });
+  }
+
+  function acSetListBodyHtml(s){
+    const list = (AC.instructionsBySet[s.id]||[]);
+    const rows = list.length ? list.map(i=>`
+      <tr class="border-t border-[#f0f0f0]">
+        <td class="p-[10px]">${i.name}</td><td class="p-[10px]">${i.code}</td><td class="p-[10px]">${i.dataType}</td>
+        <td class="p-[10px]">${i.type}</td><td class="p-[10px]">${(i.actions||[]).join('/')}</td>
+        <td class="p-[10px]"><span class="text-[#1473e6] cursor-pointer mr-[8px]" data-ins-edit="${i.id}">编辑</span><span class="text-[#ff4d4f] cursor-pointer" data-ins-del="${i.id}">删除</span></td>
+      </tr>`).join('') : `<tr><td colspan="6" class="p-[24px] text-center text-[#999]">暂无指令</td></tr>`;
+    return `
+      <div class="flex items-center mb-[16px] gap-[12px]">
+        <span class="text-[13px] text-[#666]">执行反馈:</span>${switchHtml('acset-fb', s.feedback==='reply')}
+        <input class="ml-auto h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="搜索指令">
+        <button class="h-[32px] px-[16px] bg-[#1473e6] text-white rounded-[6px] text-[13px]" data-ins-add><i class="fas fa-plus mr-[4px]"></i>新建指令</button>
+      </div>
+      <table class="w-full text-[13px] border border-[#f0f0f0]">
+        <thead class="bg-[#fafafa]"><tr><th class="p-[10px] text-left">名称</th><th class="p-[10px] text-left">编码</th><th class="p-[10px] text-left">数据类型</th><th class="p-[10px] text-left">指令类型</th><th class="p-[10px] text-left">操作行为</th><th class="p-[10px] text-left">操作</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+function acSetScheduleBodyHtml(s){
+    const sc = AC.scheduleBySet[s.id] || (AC.scheduleBySet[s.id]={ create:false, cancel:false, cancelNext:false, query:false, once:false, cycle:false, grains:{day:false}, cmds:[] });
+    if(!sc.grains) sc.grains={day:false};
+    if(!('cancelNext' in sc)) sc.cancelNext=false;
+    const capRow=(k,name,desc)=>`<tr class="border-t border-[#f0f0f0]"><td class="p-[12px] text-[13px]">${name}</td><td class="p-[12px] text-[13px] text-[#666]">${desc}</td><td class="p-[12px] text-right">${switchHtml('sc-'+k, sc[k])}</td></tr>`;
+    const cb=(k,on,dis,label)=>`<label class="flex items-center text-[13px] ${dis?'text-[#bbb]':'text-[#333]'} mr-[20px]"><input type="checkbox" data-sc-chk="${k}" ${on?'checked':''} ${dis?'disabled':''} class="mr-[6px]">${label}</label>`;
+    const cmdRows = (sc.cmds||[]).length ? sc.cmds.map((c,idx)=>`
+      <tr class="border-t border-[#f0f0f0]">
+        <td class="p-[12px] text-[13px]">${c.name}</td><td class="p-[12px] text-[13px] font-mono text-[#666]">${c.code}</td>
+        <td class="p-[12px]"><span class="px-[8px] py-[2px] text-[12px] text-[#1473e6] bg-[#e8f1ff] rounded-[4px]">${c.type}</span></td>
+        <td class="p-[12px] text-right"><span class="text-[#ff4d4f] text-[13px] cursor-pointer" data-sc-del="${idx}">移除</span></td>
+      </tr>`).join('') : `<tr><td colspan="4" class="p-[24px] text-center text-[#999]">暂无指令</td></tr>`;
+    return `
+      <div class="border border-[#f0f0f0] rounded-[8px] mb-[20px]">
+        <div class="px-[16px] py-[12px] text-[15px] font-semibold text-[#333]">定时能力</div>
+        <table class="w-full"><thead><tr class="text-[13px] text-[#666] bg-[#fafafa]"><th class="p-[12px] text-left w-[140px]">能力</th><th class="p-[12px] text-left">说明</th><th class="p-[12px] text-right w-[80px]">开关</th></tr></thead>
+        <tbody>
+          ${capRow('create','创建定时','用户可创建新的定时（如「明天 7 点开机」）')}
+          ${capRow('cancel','取消定时','用户可取消已设的定时（如「取消明天 7 点的定时」）')}
+          ${capRow('cancelNext','取消下次执行','取消循环定时的下一次执行，不删除定时任务本身。（如「取消明早的循环定时开机」）')}
+          ${capRow('query','查询定时','用户可查询当前已有的定时（如「我有哪些定时」）')}
+        </tbody></table>
+      </div>
+      <div class="border border-[#f0f0f0] rounded-[8px] mb-[20px] p-[16px]">
+        <div class="text-[15px] font-semibold text-[#333] mb-[12px]">定时类型</div>
+        <div class="text-[13px] text-[#666] mb-[8px]">支持定时类型 <i class="fas fa-question-circle text-[#bbb]"></i></div>
+        <div class="flex mb-[16px]">${cb('once',sc.once,false,'单次定时')}${cb('cycle',sc.cycle,false,'循环定时')}</div>
+        <div class="text-[13px] text-[#666] mb-[8px]">支持的循环粒度</div>
+        <div class="flex">${cb('g_day',true,true,'每天')}</div>
+      </div>
+      <div class="border border-[#f0f0f0] rounded-[8px] p-[16px]">
+        <div class="text-[15px] font-semibold text-[#333] mb-[12px]">定时执行指令</div>
+        <div class="flex items-center mb-[12px] gap-[12px]">
+          <button class="h-[32px] px-[16px] bg-[#1473e6] text-white rounded-[6px] text-[13px]" data-sc-add><i class="fas fa-plus mr-[4px]"></i>添加指令</button>
+          <input class="ml-auto h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px] w-[240px]" placeholder="搜索本清单内的指令">
+        </div>
+        <table class="w-full text-[13px] border border-[#f0f0f0]">
+          <thead class="bg-[#fafafa]"><tr><th class="p-[12px] text-left">指令名称</th><th class="p-[12px] text-left">指令编码</th><th class="p-[12px] text-left">指令类型</th><th class="p-[12px] text-right">操作</th></tr></thead>
+          <tbody>${cmdRows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function acSetBatchBodyHtml(s){
+    const tasks = AC.batchTasksBySet[s.id] || (AC.batchTasksBySet[s.id]=[]);
+    const rows = tasks.length ? tasks.map(t=>`
+      <tr class="border-t border-[#f0f0f0]">
+        <td class="p-[12px] text-[13px]">${t.name}</td>
+        <td class="p-[12px]"><span class="px-[8px] py-[2px] text-[12px] text-[#52c41a] bg-[#f6ffed] border border-[#b7eb8f] rounded-[4px]">${t.status}</span></td>
+        <td class="p-[12px] text-[13px]">${t.times} 倍</td>
+        <td class="p-[12px] text-[13px] text-[#52c41a] font-medium">${t.acc}</td>
+        <td class="p-[12px] text-[13px]">${t.creator}</td>
+        <td class="p-[12px] text-[13px]">${t.createdAt}</td>
+        <td class="p-[12px] text-[13px]"><span class="text-[#1473e6] cursor-pointer mr-[10px]" data-bt-view="${t.id}">查看详情</span><span class="text-[#ff4d4f] cursor-pointer" data-bt-del="${t.id}">删除</span></td>
+      </tr>`).join('') : `<tr><td colspan="7" class="p-[24px] text-center text-[#999]">暂无测试任务</td></tr>`;
+    return `
+      <table class="w-full text-[13px]">
+        <thead class="bg-[#fafafa]"><tr class="text-[#666]"><th class="p-[12px] text-left">任务名称</th><th class="p-[12px] text-left">状态</th><th class="p-[12px] text-left">泛化倍数</th><th class="p-[12px] text-left">整体准确率</th><th class="p-[12px] text-left">创建人</th><th class="p-[12px] text-left">创建时间</th><th class="p-[12px] text-left">操作</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="flex items-center justify-end gap-[8px] mt-[16px] text-[13px] text-[#666]">共 ${tasks.length} 条<button class="w-[28px] h-[28px] border border-[#d9d9d9] rounded-[4px]">1</button></div>`;
+  }
+
+  function acInstructionSetDrawer(){
+    const s = AC.instructionSets.find(x=>x.id===AC.activeSetId) || AC.instructionSets[0];
+    if(!AC.acSetTab) AC.acSetTab='list';
+    openDrawer(`
+      <div class="flex flex-col h-full">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
+          <div class="flex items-center text-[16px] font-medium"><span class="text-[#999]">指令库 /&nbsp;</span><input id="acset-title" class="font-medium border border-transparent hover:border-[#d9d9d9] focus:border-[#1473e6] rounded-[4px] px-[6px] py-[2px] outline-none" value="${s.name}"><span class="text-[#333]">&nbsp;指令集详情</span></div>
+          <div class="flex items-center gap-[12px]" data-set-topbtn></div>
+        </div>
+        <div class="flex gap-[20px] text-[13px] px-[24px] pt-[12px] border-b border-[#f0f0f0]" data-set-tabs>
+          <span class="pb-[8px] cursor-pointer" data-set-tab="list">指令列表</span>${((State.currentAppData||{}).iotPlatform==='集贤')?'':'<span class="pb-[8px] cursor-pointer" data-set-tab="schedule">定时指令</span><span class="pb-[8px] cursor-pointer" data-set-tab="batch">批量测试</span>'}
+        </div>
+        <div class="flex-1 overflow-y-auto p-[24px]" data-set-body></div>
+      </div>`, { widthClass:'w-3/4', onMount:(w)=>{
+        const ti=w.querySelector('#acset-title');
+        if(ti){ const commit=()=>{ const nm=ti.value.trim(); if(nm && nm!==s.name){ s.name=nm; AC.promptDirty=true; renderApp(); } };
+          ti.addEventListener('blur',commit); ti.addEventListener('keydown',ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); ti.blur(); } }); }
+        // tab 切换：抽屉内局部刷新，不重建抽屉
+        if((State.currentAppData||{}).iotPlatform==='集贤' && AC.acSetTab!=='list') AC.acSetTab='list';
+        w.querySelectorAll('[data-set-tab]').forEach(b=>b.addEventListener('click',()=>{ AC.acSetTab=b.getAttribute('data-set-tab'); acSetRenderTab(w,s); }));
+        acSetRenderTab(w,s);
+      } });
+  }
+
+  // 局部刷新：只更新 body 内容 + tab 高亮 + 头部按钮 + 重绑当前 tab 事件，不销毁抽屉
+  function acSetRenderTab(w,s){
+    let tab=AC.acSetTab||'list';
+    if((State.currentAppData||{}).iotPlatform==='集贤' && tab!=='list') tab=AC.acSetTab='list';
+    let body='', topBtn='';
+    if(tab==='list'){ body=acSetListBodyHtml(s); topBtn=''; }
+    else if(tab==='schedule'){ body=acSetScheduleBodyHtml(s); topBtn=`<button class="h-[32px] px-[16px] bg-[#165DFF] text-white rounded-[6px] text-[13px]" data-set-save>保存并发布</button>`; }
+    else { body=acSetBatchBodyHtml(s); topBtn=`<button class="h-[32px] px-[16px] bg-[#165DFF] text-white rounded-[6px] text-[13px]" data-bt-add>新建测试任务</button>`; }
+    // tab 高亮
+    w.querySelectorAll('[data-set-tab]').forEach(sp=>{ const on=sp.getAttribute('data-set-tab')===tab;
+      sp.classList.toggle('border-b-2',on); sp.classList.toggle('border-[#1473e6]',on); sp.classList.toggle('text-[#1473e6]',on); sp.classList.toggle('text-[#666]',!on); });
+    // 头部按钮
+    const tb=w.querySelector('[data-set-topbtn]'); if(tb) tb.innerHTML=topBtn;
+    // body 内容（innerHTML 替换会丢弃旧监听，安全）
+    const bd=w.querySelector('[data-set-body]'); if(bd) bd.innerHTML=body;
+    // 重绑当前 tab 事件
+    if(tab==='list') acSetListMount(w,s);
+    else if(tab==='schedule') acSetScheduleMount(w,s);
+    else acSetBatchMount(w,s);
+  }
+
+  function acSetListMount(w,s){
+    const addBtn=w.querySelector('[data-ins-add]');
+    if(addBtn) addBtn.addEventListener('click',()=>{ w.remove(); acInstructionEditDrawer(s.id, null); });
+    w.querySelectorAll('[data-ins-edit]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.getAttribute('data-ins-edit');
+      const inst=(AC.instructionsBySet[s.id]||[]).find(x=>x.id===id);
+      w.remove(); acInstructionEditDrawer(s.id, inst);
+    }));
+    w.querySelectorAll('[data-ins-del]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.getAttribute('data-ins-del');
+      confirmModal({ title:'删除指令', content:'确定删除该指令吗？', onConfirm:()=>{
+        AC.instructionsBySet[s.id]=(AC.instructionsBySet[s.id]||[]).filter(x=>x.id!==id);
+        AC.promptDirty=true; acSetRenderTab(w,s);
+      } });
+    }));
+  }
+
+  function acSetScheduleMount(w,s){
+    const sc=AC.scheduleBySet[s.id]; if(!sc) return;
+    // 能力开关（受控 data-switch，手动绑定）
+    ['create','cancel','cancelNext','query'].forEach(k=>{ const el=w.querySelector('[data-switch="sc-'+k+'"]'); if(el){ el.setAttribute('data-controlled','1'); el.addEventListener('click',()=>{ sc[k]=!sc[k]; el.classList.toggle('on',sc[k]); }); } });
+    // 类型 / 粒度 checkbox
+    w.querySelectorAll('[data-sc-chk]').forEach(cb=>cb.addEventListener('change',()=>{
+      const k=cb.getAttribute('data-sc-chk');
+      if(k==='once') sc.once=cb.checked;
+      else if(k==='cycle'){ sc.cycle=cb.checked; sc.grains.day=cb.checked; acSetRenderTab(w,s); return; }
+    }));
+    // 添加定时执行指令：从指令列表挑选
+    const scAdd=w.querySelector('[data-sc-add]');
+    if(scAdd) scAdd.addEventListener('click',()=>acSchedulePickCmd(w,s,sc));
+    w.querySelectorAll('[data-sc-del]').forEach(b=>b.addEventListener('click',()=>{
+      const idx=+b.getAttribute('data-sc-del'); sc.cmds.splice(idx,1); acSetRenderTab(w,s);
+    }));
+    const save=w.querySelector('[data-set-save]');
+    if(save) save.addEventListener('click',()=>{ AC.promptDirty=true; showToast('定时指令已保存并发布'); });
+  }
+
+  function acSchedulePickCmd(w,s,sc){
+    const list=(AC.instructionsBySet[s.id]||[]);
+    const opts=list.length ? list.map(i=>`<label class="flex items-center py-[8px] px-[12px] border-b border-[#f5f5f5] text-[13px] cursor-pointer"><input type="checkbox" data-pick="${i.id}" class="mr-[8px]">${i.name}<span class="ml-auto font-mono text-[#999]">${i.code}</span></label>`).join('') : `<div class="p-[24px] text-center text-[#999] text-[13px]">该指令集暂无指令</div>`;
+    openModal(`
+      <div class="w-[440px] bg-white rounded-[8px] shadow-xl p-[24px]">
+        <div class="text-[16px] font-medium mb-[12px]">选择指令</div>
+        <div class="max-h-[320px] overflow-y-auto border border-[#f0f0f0] rounded-[6px] mb-[16px]">${opts}</div>
+        <div class="flex justify-end gap-[12px]"><button class="h-[32px] px-[16px] border border-[#d9d9d9] rounded-[6px] text-[13px]" data-mclose>取消</button><button class="h-[32px] px-[16px] bg-[#165DFF] text-white rounded-[6px] text-[13px]" data-mok>确定</button></div>
+      </div>`, { onMount:(m)=>{
+        m.querySelectorAll('[data-mclose]').forEach(b=>b.addEventListener('click',()=>m.remove()));
+        m.querySelector('[data-mok]').addEventListener('click',()=>{
+          m.querySelectorAll('[data-pick]:checked').forEach(cb=>{ const i=list.find(x=>x.id===cb.getAttribute('data-pick')); if(i && !sc.cmds.some(c=>c.code===i.code)) sc.cmds.push({ name:i.name, code:i.code, type:i.type==='控制项指令'?'控制项':'非控制项' }); });
+          m.remove(); acSetRenderTab(w,s);
+        });
+      } });
+  }
+
+  function acSetBatchMount(w,s){
+    const btAdd=w.querySelector('[data-bt-add]');
+    if(btAdd) btAdd.addEventListener('click',()=>acBatchCreateModal(w,s));
+    w.querySelectorAll('[data-bt-view]').forEach(b=>b.addEventListener('click',()=>{ showToast('查看测试详情'); }));
+    w.querySelectorAll('[data-bt-del]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.getAttribute('data-bt-del');
+      confirmModal({ title:'删除测试任务', content:'确定删除该测试任务吗？', onConfirm:()=>{
+        AC.batchTasksBySet[s.id]=(AC.batchTasksBySet[s.id]||[]).filter(t=>t.id!==id); acSetRenderTab(w,s);
+      } });
+    }));
+  }
+
+  function acBatchCreateModal(w,s){
+    openModal(`
+      <div class="w-[440px] bg-white rounded-[8px] shadow-xl p-[24px]">
+        <div class="text-[16px] font-medium mb-[16px]">新建测试任务</div>
+        <div class="mb-[16px]"><div class="text-[13px] text-[#333] mb-[6px]">任务名称 <span class="text-[#ff4d4f]">*</span></div><input id="bt-name" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="请输入任务名称"></div>
+        <div class="mb-[20px]"><div class="text-[13px] text-[#333] mb-[6px]">泛化倍数</div><input id="bt-times" type="number" value="5" min="1" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]"></div>
+        <div class="flex justify-end gap-[12px]"><button class="h-[32px] px-[16px] border border-[#d9d9d9] rounded-[6px] text-[13px]" data-mclose>取消</button><button class="h-[32px] px-[16px] bg-[#165DFF] text-white rounded-[6px] text-[13px]" data-mok>确定</button></div>
+      </div>`, { onMount:(m)=>{
+        m.querySelectorAll('[data-mclose]').forEach(b=>b.addEventListener('click',()=>m.remove()));
+        m.querySelector('[data-mok]').addEventListener('click',()=>{
+          const nm=m.querySelector('#bt-name').value.trim(); if(!nm){ showToast('请输入任务名称'); return; }
+          const times=+m.querySelector('#bt-times').value||5;
+          const now=new Date(); const pad=n=>String(n).padStart(2,'0');
+          const ts=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+          (AC.batchTasksBySet[s.id]||(AC.batchTasksBySet[s.id]=[])).unshift({ id:'bt-'+Date.now(), name:nm, status:'已完成', times, acc:(Math.random()*40+20).toFixed(2)+'%', creator:'jd_40d11979fdb53', createdAt:ts });
+          m.remove(); acSetRenderTab(w,s);
+        });
+      } });
+  }
+
+  function acCreateSetDrawer(){
+    let name=''; let fb='reply';
+    openDrawer(`
+      <div class="flex flex-col h-full">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
+          <h3 class="text-[16px] font-medium">新建指令集</h3>
+          <i class="fas fa-times text-[#999] cursor-pointer" data-close></i>
+        </div>
+        <div class="flex-1 overflow-y-auto p-[24px]">
+          <div class="mb-[20px]"><div class="text-[14px] text-[#333] mb-[8px]">名称 <span class="text-[#ff4d4f]">*</span></div><input id="acset-name" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="请输入指令集名称"></div>
+          <div><div class="text-[14px] text-[#333] mb-[8px]">执行反馈</div>
+            <label class="flex items-center text-[13px] mb-[8px]"><input type="radio" name="acset-fb" value="reply" checked class="mr-[8px]">回复（默认）</label>
+            <label class="flex items-center text-[13px]"><input type="radio" name="acset-fb" value="silent" class="mr-[8px]">静默执行</label>
+          </div>
+        </div>
+        <div class="flex justify-end gap-[12px] px-[24px] py-[16px] border-t border-[#f0f0f0]">
+          <button class="h-[32px] px-[16px] border border-[#d9d9d9] rounded-[6px] text-[13px]" data-close>取消</button>
+          <button id="acset-ok" class="h-[32px] px-[16px] bg-[#165DFF] text-white rounded-[6px] text-[13px]">确认</button>
+        </div>
+      </div>`, { widthClass:'w-1/4 min-w-[320px]', onMount:(w)=>{
+        w.querySelectorAll('[data-ins-back]').forEach(b=>b.addEventListener('click',()=>{ AC.acSetTab='list'; w.remove(); acInstructionSetDrawer(); }));
+        w.querySelector('#acset-ok').addEventListener('click',()=>{
+          const nm = w.querySelector('#acset-name').value.trim();
+          if(!nm){ showToast('请输入指令集名称'); return; }
+          const feedback = w.querySelector('input[name="acset-fb"]:checked').value;
+          const id = 'set-'+Date.now();
+          AC.instructionSets.push({ id, name:nm, feedback });
+          AC.instructionsBySet[id] = [];
+          AC.scheduleBySet[id] = { create:false, cancel:false, query:false, once:false, cycle:false, grains:{hour:false,day:false,week:false,month:false}, cmds:[] };
+          AC.batchTasksBySet[id] = [];
+          AC.activeSetId = id; AC.acSetTab='list';
+          w.remove(); renderApp(); acInstructionSetDrawer();
+        });
+      } });
+  }
+
+  // 新建/编辑指令抽屉（参考 参考文件/index_副本.html）
+  function acInstructionEditDrawer(setId, inst){
+    const isEdit = !!inst;
+    // 例句数据：{ 操作行为: { positive:[], negative:[] } }
+    const sentenceData = (inst && inst.sentenceData) ? JSON.parse(JSON.stringify(inst.sentenceData)) : {};
+    if(!isEdit){ sentenceData['设置'] = { positive:['开灯','关灯'], negative:[] }; }
+    const baseActions = ['设置','查询','调高','调低'];
+    const checkedActions = isEdit ? (inst.actions||[]) : ['设置','查询'];
+    const esc = (str)=>String(str==null?'':str).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const actionRow = (name)=>`
+      <div class="border-b border-[#f0f0f0] py-[10px] flex items-center" data-action="${esc(name)}">
+        <label class="flex items-center text-[13px] cursor-pointer shrink-0"><input type="checkbox" ${checkedActions.indexOf(name)>=0?'checked':''} class="mr-[8px]" data-action-cb> ${esc(name)}</label>
+        <div class="action-content ml-[16px] flex-1"></div>
+      </div>`;
+    const html = `
+      <div class="flex flex-col h-full">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
+          <div class="text-[16px] font-medium text-[#333]"><span class="text-[#999] cursor-pointer hover:text-[#1473e6]" data-ins-back>指令列表</span><span class="text-[#999]"> / </span>${isEdit?'编辑指令':'新建指令'}</div>
+          <div class="flex items-center gap-[12px]">
+            <button class="h-[34px] px-[18px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-ins-save>保存并发布</button>
+            <button class="h-[34px] px-[18px] border border-[#d9d9d9] rounded-[6px] text-[14px] text-[#333]" data-ins-back>返回</button>
+          </div>
+        </div>
+        <div class="flex-1 overflow-y-auto p-[24px]">
+          <div class="mb-[18px]"><div class="text-[13px] text-[#333] mb-[8px]"><span class="text-[#ff4d4f]">*</span> 指令控制项</div>
+            <input id="ins-name" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="请输入" value="${esc(inst&&inst.name)}"></div>
+          <div class="mb-[18px]"><div class="text-[13px] text-[#333] mb-[8px]">控制项别名</div>
+            <input id="ins-alias" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="请输入，多个别名用逗号隔开" value="${esc(inst&&inst.alias)}"></div>
+          <div class="mb-[18px]"><div class="text-[13px] text-[#333] mb-[8px]"><span class="text-[#ff4d4f]">*</span> 控制项编码</div>
+            <input id="ins-code" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="只能包含英文字母、数字、下划线和连字符" value="${esc(inst&&inst.code)}"></div>
+          <div class="mb-[18px]"><div class="text-[13px] text-[#333] mb-[8px]"><span class="text-[#ff4d4f]">*</span> 指令下发方式</div>
+            <div class="flex items-center gap-[24px] text-[13px]">
+              <label class="flex items-center cursor-pointer"><input type="radio" name="ins-send" value="端侧" ${(!inst||inst.send!=='IOT平台')?'checked':''} class="mr-[6px]">端侧</label>
+              <label class="flex items-center cursor-pointer"><input type="radio" name="ins-send" value="IOT平台" ${(inst&&inst.send==='IOT平台')?'checked':''} class="mr-[6px]">IOT平台</label>
+            </div></div>
+          <div class="mb-[18px]"><div class="text-[13px] text-[#333] mb-[8px]">作用部件</div>
+            <select id="ins-part" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px] bg-white"><option>请选择作用部件，默认该指令作用于所有部件</option></select></div>
+          <div class="mb-[18px]"><div class="text-[13px] text-[#333] mb-[8px]"><span class="text-[#ff4d4f]">*</span> 数据类型</div>
+            <div class="flex items-center gap-[24px] text-[13px]">
+              <label class="flex items-center cursor-pointer"><input type="radio" name="ins-dtype" value="开关" ${(!inst||inst.dataType==='开关')?'checked':''} class="mr-[6px]">开关</label>
+              <label class="flex items-center cursor-pointer"><input type="radio" name="ins-dtype" value="枚举" ${(inst&&inst.dataType==='枚举')?'checked':''} class="mr-[6px]">枚举</label>
+              <label class="flex items-center cursor-pointer"><input type="radio" name="ins-dtype" value="数值" ${(inst&&inst.dataType==='数值')?'checked':''} class="mr-[6px]">数值</label>
+            </div></div>
+          <div class="mb-[18px]"><div class="text-[13px] text-[#333] mb-[8px]"><span class="text-[#ff4d4f]">*</span>操作行为</div>
+            <div class="border border-[#f0f0f0] rounded-[8px] px-[16px]" id="ins-actionbox">
+              ${baseActions.map(actionRow).join('')}
+              <div class="text-[#1473e6] text-[13px] cursor-pointer py-[10px]" data-action-add>＋ 添加自定义操作行为</div>
+            </div></div>
+          <div class="text-[14px] font-medium text-[#333] mt-[24px] mb-[12px]">参数配置</div>
+          <div class="p-[16px] bg-[#fafafa] rounded-[8px]">
+            <div class="text-[13px] text-[#333] mb-[12px]">开关状态映射</div>
+            <div class="flex items-center mb-[8px]"><span class="text-[13px] text-[#666] w-[110px]">状态：开 --&gt;</span><input class="flex-1 h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="例如：1, on, true"></div>
+        <div class="flex items-center"><span class="text-[13px] text-[#666] w-[110px]">状态：关 --&gt;</span><input class="flex-1 h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="例如：0, off, false"></div>
+          </div>
+        </div>
+      </div>`;
+    openDrawer(html, { widthClass:'w-3/4', onMount:(w)=>{ acInsEditMount(w, setId, inst, sentenceData, esc); } });
+  }
+
+  function acInsEditMount(w, setId, inst, sentenceData, esc){
+    const splitS = (str)=>str.split(/[,，]/).map(s=>s.trim()).filter(Boolean);
+    const renderAction = (row)=>{
+      const name = row.getAttribute('data-action');
+      const checked = row.querySelector('[data-action-cb]').checked;
+      const box = row.querySelector('.action-content');
+      box.innerHTML='';
+      if(!checked) return;
+      const d = sentenceData[name];
+      const hasPos = d && d.positive && d.positive.length>0;
+      if(!hasPos){
+        box.innerHTML = `<span class="text-[#1473e6] text-[13px] cursor-pointer" data-ex-open="${esc(name)}">添加例句</span><span class="text-[#ff4d4f] text-[13px] ml-[12px]">必填，请至少添加1条例句</span>`;
+      } else {
+        const posText = d.positive.join('，');
+        const negText = (d.negative||[]).join('，');
+        const full = '正例：'+posText+(negText?'　反例：'+negText:'');
+        let summary = `<span class="text-[#999]">正例：</span>${esc(posText)}`;
+        if(negText) summary += `<span class="text-[#999] ml-[12px]">反例：</span>${esc(negText)}`;
+        box.innerHTML = `<div class="flex items-center text-[13px]"><span class="truncate max-w-[70%]" title="${esc(full)}">${summary}</span><span class="text-[#1473e6] cursor-pointer ml-[12px] shrink-0" data-ex-open="${esc(name)}">编辑</span></div>`;
+      }
+    };
+    const renderAll = ()=>{ w.querySelectorAll('[data-action]').forEach(renderAction); };
+    const openEx = (name)=>{
+      const d = sentenceData[name] || { positive:[], negative:[] };
+      const mh = `
+        <div class="w-[520px] bg-white rounded-[8px] shadow-xl overflow-hidden">
+          <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]"><h3 class="text-[16px] font-medium">例句配置</h3><i class="fas fa-times text-[#999] cursor-pointer" data-close></i></div>
+          <div class="p-[24px]">
+            <div class="mb-[16px]"><div class="text-[13px] text-[#333] mb-[8px]"><span class="text-[#ff4d4f]">*</span> 正例</div>
+              <textarea id="ex-pos" class="w-full h-[80px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="请输入正例，多条例子用逗号隔开">${esc(d.positive.join('，'))}</textarea>
+              <div id="ex-err" class="text-[#ff4d4f] text-[12px] mt-[4px]" style="display:none">正例必填，请至少填写1条</div></div>
+            <div><div class="text-[13px] text-[#333] mb-[8px]">反例</div>
+              <textarea id="ex-neg" class="w-full h-[80px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="请输入反例（选填），多条例子用逗号隔开">${esc((d.negative||[]).join('，'))}</textarea></div>
+          </div>
+     <div class="flex justify-end gap-[12px] px-[24px] py-[16px] border-t border-[#f0f0f0]">
+            <button class="h-[32px] px-[16px] border border-[#d9d9d9] rounded-[6px] text-[13px]" data-close>取消</button>
+            <button id="ex-ok" class="h-[32px] px-[16px] bg-[#165DFF] text-white rounded-[6px] text-[13px]">确定</button>
+          </div>
+        </div>`;
+      const mw = openModal(mh, { zClass:'z-[120]' });
+      mw.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>mw.remove()));
+      mw.querySelector('#ex-ok').addEventListener('click',()=>{
+        const positive = splitS(mw.querySelector('#ex-pos').value);
+        if(positive.length===0){ mw.querySelector('#ex-err').style.display='block'; return; }
+        const negative = splitS(mw.querySelector('#ex-neg').value);
+        sentenceData[name] = { positive, negative };
+        mw.remove(); renderAll();
+      });
+    };
+    w.querySelector('#ins-actionbox').addEventListener('click',(e)=>{
+      const openBtn = e.target.closest('[data-ex-open]');
+      if(openBtn){ openEx(openBtn.getAttribute('data-ex-open')); return; }
+      const delBtn = e.target.closest('[data-action-del]');
+      if(delBtn){ const row=delBtn.closest('[data-action]'); if(row) row.remove(); return; }
+      if(e.target.closest('[data-action-add]')){
+        const box = w.querySelector('#ins-actionbox');
+        const addBtn = box.querySelector('[data-action-add]');
+        const key = 'custom-'+Date.now();
+        const row = document.createElement('div');
+        row.className='border-b border-[#f0f0f0] py-[10px] flex items-center'; row.setAttribute('data-action',key);
+        row.innerHTML = `<i class="far fa-minus-circle text-[#999] cursor-pointer mr-[10px] shrink-0" data-action-del></i>`+
+          `<input type="checkbox" checked class="hidden" data-action-cb>`+
+          `<div class="relative shrink-0"><input type="text" maxlength="20" class="w-[220px] h-[34px] pl-[12px] pr-[52px] border border-[#d9d9d9] rounded-[6px] text-[13px] outline-none focus:border-[#1473e6]" placeholder="请输入操作行为" data-action-name><span class="absolute right-[12px] top-1/2 -translate-y-1/2 text-[12px] text-[#bbb] pointer-events-none" data-action-count>0 / 20</span></div>`+
+          `<div class="action-content ml-[16px] flex-1"></div>`;
+        box.insertBefore(row, addBtn); renderAction(row);
+        const nameInput = row.querySelector('[data-action-name]');
+        nameInput.focus();
+      }
+    });
+    w.querySelector('#ins-actionbox').addEventListener('change',(e)=>{
+      const cb = e.target.closest('[data-action-cb]');
+      if(cb) renderAction(cb.closest('[data-action]'));
+    });
+    w.querySelector('#ins-actionbox').addEventListener('input',(e)=>{
+      const ni = e.target.closest('[data-action-name]');
+      if(ni){ const row=ni.closest('[data-action]'); const cnt=row&&row.querySelector('[data-action-count]'); if(cnt) cnt.textContent=(ni.value.length)+' / 20'; }
+    });    w.querySelectorAll('[data-ins-back]').forEach(b=>b.addEventListener('click',()=>{ AC.acSetTab='list'; w.remove(); acInstructionSetDrawer(); }));
+    w.querySelector('[data-ins-save]').addEventListener('click',()=>{
+      const name = w.querySelector('#ins-name').value.trim();
+      const code = w.querySelector('#ins-code').value.trim();
+      if(!name){ showToast('请输入指令控制项'); return; }
+      if(!code){ showToast('请输入控制项编码'); return; }
+      const dataType = (w.querySelector('input[name="ins-dtype"]:checked')||{}).value||'开关';
+      const send = (w.querySelector('input[name="ins-send"]:checked')||{}).value||'端侧';
+      const alias = w.querySelector('#ins-alias').value.trim();
+      const actions = Array.from(w.querySelectorAll('[data-action]')).filter(r=>r.querySelector('[data-action-cb]').checked).map(r=>{ const ni=r.querySelector('[data-action-name]'); return ni? ni.value.trim() : r.getAttribute('data-action'); }).filter(Boolean);
+      const obj = { id: inst? inst.id : 'ins-'+Date.now(), name, code, alias, dataType, send,
+        type:'控制项指令', actions, silent:false, sentenceData,
+        createdAt: inst? inst.createdAt : new Date().toLocaleString('zh-CN') };
+      if(!AC.instructionsBySet[setId]) AC.instructionsBySet[setId]=[];
+      if(inst){ const i=AC.instructionsBySet[setId].findIndex(x=>x.id===inst.id); if(i>=0) AC.instructionsBySet[setId][i]=obj; }
+      else { AC.instructionsBySet[setId].push(obj); }
+      AC.promptDirty=true; w.remove(); renderApp(); acInstructionSetDrawer();
+      showToast(inst?'指令已更新':'指令已创建');
+    });
+    renderAll();
+  }
+
+  function acTutorialModal(){
+    const h2=(t)=>`<h4 class="text-[15px] font-medium text-[#333] mt-[20px] mb-[8px] first:mt-0">${t}</h4>`;
+    const p=(t)=>`<p class="text-[13px] text-[#555] leading-[1.8] mb-[8px]">${t}</p>`;
+    const item=(n,title,body)=>`
+      <div class="flex mb-[10px]">
+        <span class="shrink-0 w-[20px] h-[20px] rounded-full bg-[#165DFF] text-white text-[12px] flex items-center justify-center mr-[10px] mt-[2px]">${n}</span>
+        <div><div class="text-[13px] font-medium text-[#333] mb-[2px]">${title}</div><div class="text-[13px] text-[#555] leading-[1.7]">${body}</div></div>
+      </div>`;
+    const html=`
+      <div class="w-[720px] max-h-[80vh] bg-white rounded-[8px] shadow-xl flex flex-col overflow-hidden">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
+          <h3 class="text-[16px] font-medium text-[#333]"><i class="fas fa-book text-[#165DFF] mr-[8px]"></i>编写教程</h3>
+          <i class="fas fa-times text-[#999] cursor-pointer" data-close></i>
+        </div>
+        <div class="flex-1 overflow-y-auto px-[24px] py-[20px]">
+          ${h2('提示词类型')}
+          ${p('<b>根据指令集生成</b>：提示词以当前产品的指令集为基础自动生成，用户可以在此之上继续补充自定义内容。当指令集发生变更后，页面会提示更新提示词；点击更新会依据最新指令集全量刷新整个提示词，因此建议在更新前先把已编辑的内容复制保存，以免被覆盖。若当前产品无指令集，提示词将为空且不可编辑，需先配置指令集。')}
+          ${p('<b>自定义提示词</b>：完全由用户自行编写提示词内容。选择该模式后，指令集配置将不再参与生成，以编写的提示词为准。适合需要完全掌控提示词、或指令集无法覆盖的复杂场景。')}
+          ${h2('提示词结构')}
+          ${p('用户说一句话后，系统会依次经过三层提示词处理，每一层的产出会喂给下一层。你可以把它想成一个流水线：意图层负责“接不接”，规划层负责“怎么做”，执行层负责“具体出什么参数”。')}
+          ${item('1','意图准入判断 · 先判断“这句话该不该我管”','判断用户输入是否属于本产品能处理的设备指令（如“把灯调亮”命中），不命中则不进入后续流程。它是整条链路的入口，决定后面两层是否被触发。')}
+          ${item('2','任务规划器 · 任务拆解 / 需求澄清 / 参数提取','把整句拆成一个或多个子任务；对信息不全的表达发起澄清；从自然语言中提取执行所需的关键参数，并决定调用顺序与依赖。它承上启下，把用户的一句话整理成执行层能直接消费的清晰任务。该层可按需开启或关闭。')}
+          ${item('3','工具执行 · 按结构化协议出参数','对具体子任务生成符合协议的结构化输出（如 intent/args/deviceTimerBody），交给设备侧执行。它是链路的最终出口，直接对接设备能力。')}
+          ${h2('什么时候可以关闭规划层')}
+          ${p('规划层主要解决复杂任务的拆解、多轮澄清与参数提取。当产品交互足够简单——例如只做单步控制、指令表达明确、无需澄清或串联多个动作时，可以关闭规划层。')}
+          ${p('关闭后链路仅走意图层 + 执行层，少了一层处理，响应更快、也更稳定可控；相应地会失去自动拆解与追问澄清的能力。')}
+          ${p('建议按产品实际复杂度选择：交互越复杂越应开启规划层，越简单直接则越适合关闭。')}
+          ${h2('编写建议')}
+          ${p('<b>意图准入判断</b>：重点补正例/反例——把用户会说但不该命中的句子写进反例，可以显著降低误触。')}
+          ${p('<b>任务规划器</b>：重点补范围与降级——比如“没识别到具体设备时，默认落到客厅”“音量超过 80 时先确认”。')}
+          ${p('<b>工具执行</b>：重点补示例——用几组输入→输出对齐格式，比长篇规则更有效。')}
+        </div>
+        <div class="px-[24px] py-[14px] border-t border-[#f0f0f0] flex justify-end">
+          <button class="h-[34px] px-[20px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-close>我知道了</button>
+        </div>
+      </div>`;
+    openModal(html, { onMount:(w)=>{ w.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>w.remove())); } });
+  }
+
+  // 添加工具抽屉（工具执行层）
+  function acToolDrawer(){
+    const ta = document.querySelector('[data-ac-tool-target]');
+    let insertPos = ta ? (ta.selectionStart!=null ? ta.selectionStart : ta.value.length) : 0;
+    const tools = AC.tools || [];
+    if(!tools.length){ showToast('暂无可用系统工具'); return; }
+    const listHtml = tools.map((tl,i)=>`
+      <div class="px-[16px] py-[12px] text-[14px] cursor-pointer border-l-[3px] ${i===0?'text-[#165DFF] bg-[#f4f8ff] border-[#165DFF]':'text-[#333] border-transparent hover:bg-[#fafafa]'}" data-tool-item="${i}">${tl.name}</div>`).join('');
+    const detail = (tl)=>{
+      const params = tl.params.map(p=>`
+        <div class="flex items-baseline mb-[6px]">
+          <code class="px-[6px] py-[2px] bg-[#f5f5f5] rounded-[4px] text-[13px] text-[#333]">${p.k}</code>
+          <span class="text-[13px] text-[#999] ml-[10px]">: ${p.t}</span>
+        </div>`).join('');
+      return `
+        <div class="flex items-center justify-between mb-[24px]">
+          <h3 class="text-[18px] font-medium text-[#333]">${tl.name}</h3>
+          <button class="h-[34px] px-[20px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-tool-confirm>添加</button>
+        </div>
+        <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[6px]">描述</div><div class="text-[14px] text-[#333]">${tl.desc}</div></div>
+        <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[8px]">入参</div>${params}</div>
+        <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[8px]">返回</div><code class="inline-block px-[10px] py-[6px] bg-[#f5f5f5] rounded-[6px] text-[13px] text-[#333]">${tl.ret}</code></div>
+        <div><div class="text-[13px] text-[#999] mb-[8px]">变量</div><code class="inline-block px-[10px] py-[6px] bg-[#f5f5f5] rounded-[6px] text-[13px] text-[#333]">{{tool.${tl.name}}}</code></div>`;
+    };
+    const html = `
+      <div class="h-full flex flex-col">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
+          <h3 class="text-[16px] font-medium text-[#333]">添加工具</h3>
+          <i class="fas fa-times text-[#999] cursor-pointer" data-close></i>
+        </div>
+        <div class="flex-1 flex overflow-hidden">
+          <div class="w-[200px] border-r border-[#f0f0f0] overflow-y-auto py-[8px]" data-tool-list>${listHtml}</div>
+          <div class="flex-1 overflow-y-auto px-[24px] py-[20px]" data-tool-detail>${detail(tools[0])}</div>
+        </div>
+      </div>`;
+    openDrawer(html, { widthClass:'w-[760px]', onMount:(w)=>{
+      let cur = 0;
+      const detailBox = w.querySelector('[data-tool-detail]');
+      w.querySelectorAll('[data-ins-back]').forEach(b=>b.addEventListener('click',()=>{ AC.acSetTab='list'; w.remove(); acInstructionSetDrawer(); }));
+      w.querySelector('[data-tool-list]').addEventListener('click',(e)=>{
+        const it = e.target.closest('[data-tool-item]');
+        if(!it) return;
+        cur = parseInt(it.getAttribute('data-tool-item'));
+        w.querySelectorAll('[data-tool-item]').forEach((n,i)=>{
+          n.className = 'px-[16px] py-[12px] text-[14px] cursor-pointer border-l-[3px] '+(i===cur?'text-[#165DFF] bg-[#f4f8ff] border-[#165DFF]':'text-[#333] border-transparent hover:bg-[#fafafa]');
+        });
+        detailBox.innerHTML = detail(tools[cur]);
+      });
+      detailBox.addEventListener('click',(e)=>{
+        if(!e.target.closest('[data-tool-confirm]')) return;
+        const token = '{{tool.'+tools[cur].name+'}}';
+        if(ta){
+          const v = ta.value;
+          ta.value = v.slice(0,insertPos) + token + v.slice(insertPos);
+          insertPos += token.length;
+          ta.focus();
+          try{ ta.setSelectionRange(insertPos,insertPos); }catch(err){}
+        }
+        showToast('已添加 '+tools[cur].name);
+        w.remove();
+      });
+    } });
+  }
+
+  /* ================= 事件绑定 ================= */
+  window.PageEvents.appConfig = function(){
+    const app = document.getElementById('app');
+    // 统一点击委托（用 onclick 覆盖式绑定，避免 renderApp 后监听器累积导致需多次点击）
+    app.onclick = function(e){
+      const t = e.target;
+      // switch 开关
+      const sw = t.closest('[data-switch]');
+      if(sw){
+        const id = sw.getAttribute('data-switch');
+        if(id==='ac-aiot'){ AC.aiotEnabled=!AC.aiotEnabled; renderApp(); return; }
+        if(id==='ac-planner'){ AC.isTaskPlannerEnabled=!AC.isTaskPlannerEnabled; renderApp(); return; }
+        if(id && id.indexOf('ac-strat-')===0){ const k=id.replace('ac-strat-',''); AC.strategies[k]=!AC.strategies[k]; renderApp(); return; }
+      }
+      if(t.closest('[data-ac-go-index]')){ setCurrentPage('index'); return; }
+      if(t.closest('[data-ac-toggle-info]')){ AC.productInfoExpanded=!AC.productInfoExpanded; renderApp(); return; }
+      if(t.closest('[data-ac-hotword]')){ acHotWordModal(); return; }
+      if(t.closest('[data-ac-save-draft]')){ acSaveToast('草稿已保存'); AC.saveToast='草稿已保存'; renderApp(); setTimeout(()=>{ AC.saveToast=''; },2400); return; }
+      // 智能体
+      const agent = t.closest('[data-ac-agent]');
+      if(agent){ acSwitchAgent(agent.getAttribute('data-ac-agent')); renderApp(); return; }
+      if(t.closest('[data-ac-agent-create]')){
+        if(AC.agents.length>=10){ showToast('智能体数量已达上限'); return; }
+        acSnapshotAgent(AC.activeAgentId);
+        const id='agent-'+Date.now();
+        AC.agents.push({ id, name:'新智能体', isDefault:false });
+        AC.activeAgentId=id;
+        acLoadAgent(id); // 新智能体使用默认空配置，不继承其它智能体已编辑内容
+        renderApp(); return;
+      }
+      const setDef = t.closest('[data-ac-agent-setdefault]');
+      if(setDef){ const id=setDef.getAttribute('data-ac-agent-setdefault'); AC.agents.forEach(a=>a.isDefault=(a.id===id)); renderApp(); return; }
+      const ren = t.closest('[data-ac-agent-rename]');
+      if(ren){ const id=ren.getAttribute('data-ac-agent-rename'); const a=AC.agents.find(x=>x.id===id); const nm=prompt('重命名智能体', a?a.name:''); if(nm && a){ a.name=nm.trim(); renderApp(); } return; }
+      const del = t.closest('[data-ac-agent-delete]');
+      if(del){ const id=del.getAttribute('data-ac-agent-delete');
+        confirmModal({ title:'删除智能体', content:'确定删除该智能体吗？', onConfirm:()=>{ AC.agents=AC.agents.filter(a=>a.id!==id); delete AgentConfigStore[id]; if(AC.activeAgentId===id){ AC.activeAgentId=AC.agents[0].id; acLoadAgent(AC.activeAgentId); } renderApp(); } });
+        return;
+      }
+      // 技能
+      if(t.closest('[data-ac-skill-add]')){ AC.skillDropdownOpen=!AC.skillDropdownOpen; renderApp(); return; }
+      if(t.closest('[data-ac-skill-mask]')){ AC.skillDropdownOpen=false; renderApp(); return; }
+      const stog = t.closest('[data-ac-skill-toggle]');
+      if(stog){ const id=stog.getAttribute('data-ac-skill-toggle');
+        const sk=ALL_SKILLS.find(s=>s.id===id);
+        if(AC.version==='lite' && !(sk&&sk.lite)){ showToast('当前lite版暂不支持该技能'); return; }
+        if(AC.selectedSkillIds.includes(id)) AC.selectedSkillIds=AC.selectedSkillIds.filter(x=>x!==id);
+        else AC.selectedSkillIds.push(id);
+        renderApp(); return;
+      }
+      const scust = t.closest('[data-ac-custom-skill]');
+      if(scust){ showToast('自定义技能配置'); return; }
+      const scrm = t.closest('[data-ac-custom-remove]');
+      if(scrm){ const id=scrm.getAttribute('data-ac-custom-remove'); AC.customSkills=AC.customSkills.filter(c=>c.id!==id); renderApp(); return; }
+      // MCP
+      if(t.closest('[data-ac-mcp-add]')){ showToast('添加MCP服务'); return; }
+      const mrm = t.closest('[data-ac-mcp-remove]');
+      if(mrm){ const id=mrm.getAttribute('data-ac-mcp-remove'); AC.mcpServices=AC.mcpServices.filter(m=>m.id!==id); renderApp(); return; }
+      // AIoT 提示词单选
+      const prompt2 = t.closest('[data-ac-prompt]');
+      if(prompt2){ AC.promptType=prompt2.getAttribute('data-ac-prompt'); renderApp(); return; }
+      // 指令集
+      const setDelBtn = t.closest('[data-ac-set-del]');
+      if(setDelBtn){ e.stopPropagation(); const id=setDelBtn.getAttribute('data-ac-set-del');
+        confirmModal({ title:'删除指令集', content:'确定删除该指令集吗？', onConfirm:()=>{ AC.instructionSets=AC.instructionSets.filter(s=>s.id!==id); delete AC.instructionsBySet[id]; if(AC.activeSetId===id) AC.activeSetId=(AC.instructionSets[0]||{}).id; AC.promptDirty=true; renderApp(); } });
+        return;
+      }
+      if(t.closest('[data-ac-set-create]')){ acCreateSetDrawer(); return; }
+      const setBtn = t.closest('[data-ac-set]');
+      if(setBtn){ AC.activeSetId=setBtn.getAttribute('data-ac-set'); AC.acSetTab='list'; renderApp(); acInstructionSetDrawer(); return; }
+      // 垫句
+      if(t.closest('[data-ac-filler-add]')){ if(AC.fillerSentences.length>=5){ showToast('最多5条垫句'); return; } AC.fillerSentences.push(''); renderApp(); return; }
+      const fdel = t.closest('[data-ac-filler-del]');
+      if(fdel){ const i=parseInt(fdel.getAttribute('data-ac-filler-del')); if(AC.fillerSentences.length<=1){ showToast('至少保留1条'); return; } AC.fillerSentences.splice(i,1); renderApp(); return; }
+      // 添加工具
+      if(t.closest('[data-ac-tool-add]')){ e.stopPropagation(); acToolDrawer(); return; }
+      // 设备上行状态：解析并配置翻译（需在 data-ac-step 之前判断，避免误触展开）
+      if(t.closest('[data-ac-devstate-edit]')){ acDeviceStateModal(); return; }
+      // 三步流程展开
+      const step = t.closest('[data-ac-step]');
+      if(step){ const k=step.getAttribute('data-ac-step'); AC.expandedSteps[k]=!AC.expandedSteps[k]; renderApp(); return; }
+      // 提示词更新 banner
+      if(t.closest('[data-ac-prompt-backup]')){
+        const txt='【意图准入判断】\n你是一个中文智能家居设备控制意图二分类器。\n\n【任务规划器】\n# Role \n你是东东，京东开发的智能灯语音助手。\n\n【工具执行】\n# Role \n你是东东，京东开发的智能灯语音助手。你的任务是分析用户的自然语言指令，理解其意图，并严格输出对应的JSON。';
+        if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(()=>showToast('已复制备份')).catch(()=>showToast('已复制备份')); } else { showToast('已复制备份'); }
+        return;
+      }
+      if(t.closest('[data-ac-prompt-update]')){ AC.promptDirty=false; showToast('提示词已更新'); renderApp(); return; }
+      // 编写教程
+      if(t.closest('[data-ac-tutorial]')){ acTutorialModal(); return; }
+      // 指令区
+      if(t.closest('[data-ac-cmd-add]')){
+       const nm=prompt('请输入指令名称','');
+        if(nm && nm.trim()){ AC.commands.push({ id:'cmd-'+Date.now(), name:nm.trim(), type:'自定义' }); renderApp(); }
+        return;
+      }
+      const cmdDel=t.closest('[data-ac-cmd-del]');
+      if(cmdDel){ e.stopPropagation(); const id=cmdDel.getAttribute('data-ac-cmd-del');
+        confirmModal({ title:'删除指令', content:'确定删除该指令吗？', onConfirm:()=>{ AC.commands=AC.commands.filter(c=>c.id!==id); renderApp(); } });
+        return;
+      }
+      if(t.closest('[data-ac-cmd]')){ showToast('指令配置'); return; }
+      // 交互策略编辑
+      const stratEdit = t.closest('[data-ac-strat-edit]');
+      if(stratEdit){ acStratDrawer(stratEdit.getAttribute('data-ac-strat-edit')); return; }
+    };
+    // 垫句输入同步（oninput 委托，避免监听器累积）
+    app.oninput = function(e){
+      const inp = e.target.closest('[data-ac-filler-idx]');
+      if(inp){ const i=parseInt(inp.getAttribute('data-ac-filler-idx')); AC.fillerSentences[i]=inp.value; }
+    };
+  };
+  </script>
+
+  <!-- ============ 初始化 ============ -->
+  <script>
+  /* ---------- 初始化 ---------- */
+  document.addEventListener('DOMContentLoaded', function(){
+    State.currentPage = State.currentPage || 'index';
+    renderApp();
+  });
+  </script>
+</body>
+</html>
