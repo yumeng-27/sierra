@@ -475,20 +475,107 @@
 
   <!-- ============ 指令库 InstructionLibraryPage ============ -->
   <script>
+  const IL_CLICKABLE_TITLES = ['退出对话','电量查询','音量调节'];
+  const InstructionLib = { detail:null, detailTab:'list' };
+  const IL_MOCK = [
+    { title:'指令集2.0', desc:'111', author:'jd_40d11979fdb53', time:'2026-07-21 13:51', isOld:false },
+    { title:'灯的指令集', desc:'灯', author:'jd_40d11979fdb53', time:'2026-06-26 15:53', isOld:false },
+    { title:'我的测试指令集', desc:'测试指令集', author:'jd_40d11979fdb53', time:'2026-05-25 16:31', isOld:false },
+    { title:'自定义指令集2', desc:'我的自定义指令集2', author:'jd_40d11979fdb53', time:'2026-05-09 13:59', isOld:true },
+    { title:'自定义指令集1', desc:'我的自定义指令集', author:'jd_40d11979fdb53', time:'2026-05-09 13:59', isOld:true },
+    { title:'测试指令集', desc:'11', author:'jd_40d11979fdb53', time:'2026-04-14 16:11', isOld:true },
+    { title:'退出对话', desc:'', author:'system', time:'2026-04-02 21:21', isOld:false },
+    { title:'电量查询', desc:'', author:'system', time:'2026-03-28 16:31', isOld:false },
+    { title:'音量调节', desc:'', author:'system', time:'2026-03-28 16:30', isOld:false },
+  ];
+  function ilIsClickable(item){ return item.isOld || IL_CLICKABLE_TITLES.includes(item.title); }
+  function ilCommandsFor(title){
+    const map = {
+      '指令集2.0':[{name:'开启空气检测',code:'air_check_on',prompt:'帮我检测一下空气',slot:'无槽位',time:'2026/7/21 13:52:10'}],
+      '灯的指令集':[{name:'开灯',code:'light_on',prompt:'把灯打开',slot:'无槽位',time:'2026/6/26 15:54:02'},{name:'关灯',code:'light_off',prompt:'把灯关掉',slot:'无槽位',time:'2026/6/26 15:55:31'}],
+      '我的测试指令集':[{name:'这是一个测试指令',code:'08042',prompt:'提示词',slot:'无槽位',time:'2026/5/25 16:32:06'}],
+      '自定义指令集2':[{name:'自定义指令A',code:'custom_a',prompt:'执行自定义A',slot:'无槽位',time:'2026/5/9 14:00:12'}],
+      '自定义指令集1':[{name:'自定义指令1',code:'custom_1',prompt:'执行自定义1',slot:'无槽位',time:'2026/5/9 13:59:48'}],
+      '测试指令集':[{name:'测试',code:'test_01',prompt:'测试提示词',slot:'无槽位',time:'2026/4/14 16:12:00'}],
+      '退出对话':[{name:'退出对话',code:'exit_dialog',prompt:'再见/退出/结束对话',slot:'无槽位',time:'2026/4/2 21:21:30'}],
+      '电量查询':[{name:'电量查询',code:'battery_query',prompt:'查一下电量/还有多少电',slot:'无槽位',time:'2026/3/28 16:31:20'}],
+      '音量调节':[{name:'调大音量',code:'volume_up',prompt:'声音大一点',slot:'音量:+',time:'2026/3/28 16:30:10'},{name:'调小音量',code:'volume_down',prompt:'声音小一点',slot:'音量:-',time:'2026/3/28 16:30:40'}],
+    };
+    return map[title] || [{name:'示例指令',code:'demo_01',prompt:'示例提示词',slot:'无槽位',time:'2026/1/1 00:00:00'}];
+  }
+  function ilDetailHtml(item){
+    const tab = InstructionLib.detailTab || 'list';
+    const cmds = ilCommandsFor(item.title);
+    const tabBtn = (key,label)=>`<div data-il-tab="${key}" class="cursor-pointer px-[16px] h-[40px] flex items-center text-[14px] ${tab===key?'text-[#1473e6] border-b-2 border-[#1473e6] font-medium':'text-[#666] border-b-2 border-transparent'}">${label}</div>`;
+    const rows = cmds.map(c=>`
+      <tr class="border-b border-[#f0f0f0]">
+        <td class="py-[12px] px-[16px] text-[14px] text-[#333]">${c.name}</td>
+        <td class="py-[12px] px-[16px] text-[14px] text-[#666]">${c.code}</td>
+        <td class="py-[12px] px-[16px] text-[14px] text-[#666]">${c.prompt}</td>
+        <td class="py-[12px] px-[16px] text-[14px] text-[#666]">${c.slot}</td>
+        <td class="py-[12px] px-[16px] text-[14px] text-[#999]">${c.time}</td>
+        <td class="py-[12px] px-[16px] text-[14px]">
+          <span class="text-[#ccc] cursor-not-allowed mr-[16px]">编辑</span>
+          <span class="text-[#ccc] cursor-not-allowed">删除</span>
+        </td>
+      </tr>`).join('');
+    let body = '';
+    if (tab==='list') {
+      body = `
+      <div class="bg-[#fffbe6] border border-[#ffe58f] rounded-[4px] px-[16px] py-[10px] mb-[16px] flex items-center text-[13px] text-[#614700]">
+        <i class="fas fa-exclamation-circle text-[#faad14] mr-[8px]"></i>
+        此指令集为旧版格式,仅支持查看,不再支持编辑与新增。
+      </div>
+      <div class="flex items-center justify-between mb-[16px]">
+        <div class="relative w-[280px]">
+          <i class="fas fa-search absolute left-[12px] top-1/2 -translate-y-1/2 text-[#bbb] text-[13px]"></i>
+          <input disabled placeholder="搜索指令名称" class="w-full h-[34px] pl-[34px] pr-[12px] border border-[#e5e5e5] rounded-[4px] text-[14px] bg-[#fafafa] text-[#999]" />
+        </div>
+        <button class="h-[34px] px-[16px] rounded-[4px] bg-[#f0f0f0] text-[#bbb] cursor-not-allowed text-[14px]"><i class="fas fa-plus text-[12px] mr-[6px]"></i>新建指令</button>
+      </div>
+      <table class="w-full border-collapse">
+        <thead><tr class="bg-[#fafafa] text-left text-[13px] text-[#999]">
+          <th class="py-[12px] px-[16px] font-normal">指令名称</th>
+          <th class="py-[12px] px-[16px] font-normal">指令编码</th>
+          <th class="py-[12px] px-[16px] font-normal">指令识别提示词</th>
+          <th class="py-[12px] px-[16px] font-normal">槽值</th>
+          <th class="py-[12px] px-[16px] font-normal">创建时间</th>
+          <th class="py-[12px] px-[16px] font-normal">操作</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    } else {
+      body = `<div class="py-[60px] text-center text-[14px] text-[#999]">该功能在只读模式下不可用</div>`;
+    }
+    return `
+    <div class="w-full h-full flex flex-col p-[24px] bg-[#f4f5f7] overflow-y-auto">
+      <div class="flex items-center text-[13px] text-[#999] mb-[16px]">
+        <span data-il-back class="cursor-pointer hover:text-[#1473e6]">指令库</span>
+        <i class="fas fa-chevron-right text-[10px] mx-[8px]"></i>
+        <span class="text-[#333]">${item.title}指令集详情</span>
+      </div>
+      <div class="flex items-center mb-[20px]">
+        <span data-il-back class="cursor-pointer mr-[12px] text-[#666] hover:text-[#1473e6]"><i class="fas fa-arrow-left"></i></span>
+        <span class="text-[20px] font-medium text-[#333] mr-[12px]">${item.title}</span>
+        <span class="inline-flex items-center px-[8px] py-[2px] bg-[#f0f0f0] text-[#999] text-[12px] rounded-[2px]"><i class="fas fa-lock text-[10px] mr-[4px]"></i>旧版 · 只读</span>
+      </div>
+      <div class="bg-white rounded-[8px] border border-[#e5e5e5] flex flex-col flex-1">
+        <div class="flex items-center px-[16px] border-b border-[#f0f0f0]">
+          ${tabBtn('list','指令列表')}
+          ${tabBtn('timer','定时指令')}
+          ${tabBtn('batch','批量测试')}
+        </div>
+        <div class="p-[16px] flex-1">${body}</div>
+      </div>
+    </div>`;
+  }
   window.Pages.instructionLibrary = function(){
-    const mockData = [
-      { title:'指令集2.0', desc:'111', author:'jd_40d11979fdb53', time:'2026-07-21 13:51', isOld:false },
-      { title:'灯的指令集', desc:'灯', author:'jd_40d11979fdb53', time:'2026-06-26 15:53', isOld:false },
-      { title:'我的测试指令集', desc:'测试指令集', author:'jd_40d11979fdb53', time:'2026-05-25 16:31', isOld:false },
-      { title:'自定义指令集2', desc:'我的自定义指令集2', author:'jd_40d11979fdb53', time:'2026-05-09 13:59', isOld:true },
-      { title:'自定义指令集1', desc:'我的自定义指令集', author:'jd_40d11979fdb53', time:'2026-05-09 13:59', isOld:true },
-      { title:'测试指令集', desc:'11', author:'jd_40d11979fdb53', time:'2026-04-14 16:11', isOld:true },
-      { title:'退出对话', desc:'', author:'system', time:'2026-04-02 21:21', isOld:false },
-      { title:'电量查询', desc:'', author:'system', time:'2026-03-28 16:31', isOld:false },
-      { title:'音量调节', desc:'', author:'system', time:'2026-03-28 16:30', isOld:false },
-    ];
-    const cards = mockData.map(item=>`
-      <div class="w-[calc(25%-12px)] min-w-[240px] bg-[#fcfcfc] border border-[#e5e5e5] rounded-[8px] p-[16px] flex flex-col">
+    if (InstructionLib.detail) return ilDetailHtml(InstructionLib.detail);
+    const mockData = IL_MOCK;
+    const cards = mockData.map((item,idx)=>{
+      const clickable = ilIsClickable(item);
+      return `
+      <div ${clickable?`data-il-open="${idx}" class="cursor-pointer w-[calc(25%-12px)] min-w-[240px] bg-[#fcfcfc] border border-[#e5e5e5] rounded-[8px] p-[16px] flex flex-col transition hover:border-[#4f46e5] hover:shadow-md"`:`class="w-[calc(25%-12px)] min-w-[240px] bg-[#fcfcfc] border border-[#e5e5e5] rounded-[8px] p-[16px] flex flex-col"`}>
         <div class="flex items-center mb-[8px]">
           ${item.isOld?`<span class="inline-block px-[4px] py-[2px] bg-[#f0f0f0] text-[#999] text-[12px] rounded-[2px] mr-[8px]">旧版</span>`:''}
           <span class="text-[16px] font-medium text-[#666] truncate">${item.title}</span>
@@ -500,7 +587,8 @@
             <div class="flex items-center"><i class="far fa-clock text-[10px] mr-[6px]"></i><span>${item.time}</span></div>
           </div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     return `
     <div class="w-full h-full flex flex-col p-[24px] bg-[#f4f5f7] overflow-y-auto">
       <div class="flex items-start justify-between mb-[20px]">
@@ -522,8 +610,8 @@
           <span class="text-[14px] font-medium text-[#333] mb-[8px]">指令数据已迁移,指令库暂时停用</span>
           <div class="text-[13px] text-[#666] leading-relaxed">
             指令库不再支持新增指令集与指令,历史数据仅作留存展示,<strong>不再支持编辑与调用。</strong> 原有数据已按类型迁移至以下位置:<br/>
-            · <strong>AIOT 指令集</strong> 已迁移至 <a href="#" class="text-[#1473e6] hover:underline">产品管理 → 智能体 → AIOT 设备控制 →</a><br/>
-            · 旧版自定义指令、系统指令 已迁移至 <a href="#" class="text-[#1473e6] hover:underline">「指令」模块 →</a>
+            · <strong>AIOT 指令集</strong> 已迁移至 <a href="#" class="text-[#1473e6] hover:underline">产品管理 → 智能体 → AIOT 设备控制</a><br/>
+            · 旧版自定义指令、系统指令 已迁移至 <a href="#" class="text-[#1473e6] hover:underline">「指令」模块</a>
           </div>
         </div>
         <button data-il-alert-close class="absolute right-[16px] top-[16px] text-[#999] hover:text-[#333]"><i class="fas fa-times text-[14px]"></i></button>
@@ -545,6 +633,31 @@
     const root = document.getElementById('app');
     const close = root.querySelector('[data-il-alert-close]');
     if(close) close.addEventListener('click',()=>{ const a=root.querySelector('[data-il-alert]'); if(a) a.remove(); });
+    // 卡片点击 -> 进入只读详情
+    root.querySelectorAll('[data-il-open]').forEach(el=>{
+      el.addEventListener('click',()=>{
+        const idx = parseInt(el.getAttribute('data-il-open'),10);
+        const item = IL_MOCK[idx];
+        if(!item) return;
+        InstructionLib.detail = item;
+        InstructionLib.detailTab = 'list';
+        renderApp();
+      });
+    });
+    // 详情页返回
+    root.querySelectorAll('[data-il-back]').forEach(el=>{
+      el.addEventListener('click',()=>{
+        InstructionLib.detail = null;
+        renderApp();
+      });
+    });
+    // 详情页 Tab 切换
+    root.querySelectorAll('[data-il-tab]').forEach(el=>{
+      el.addEventListener('click',()=>{
+        InstructionLib.detailTab = el.getAttribute('data-il-tab');
+        renderApp();
+      });
+    });
   };
   </script>
 
@@ -1368,8 +1481,8 @@ const wrap = openModal(html);
                 </div>
                 <button class="h-[32px] px-[14px] bg-[#165dff] text-white rounded-[6px] text-[12px]" data-ds-parse>获取上行状态</button>
               </div>
-              <div class="text-[12px] text-[#999] mb-[4px]">上行状态 JSON（可编辑）</div>
-              <textarea class="w-full h-[150px] p-[10px] border border-[#e5e6eb] rounded-[6px] text-[12px] font-mono leading-[1.6] bg-[#fbfcfd]" data-ds-json>${esc(defaultJson)}</textarea>
+              <div class="text-[12px] text-[#999] mb-[4px]">上行状态 JSON（只读）</div>
+              <textarea readonly class="w-full h-[150px] p-[10px] border border-[#e5e6eb] rounded-[6px] text-[12px] font-mono leading-[1.6] bg-[#f7f8fa] text-[#4e5969] cursor-default" placeholder="请先填写 deviceId 与 token，点击「获取上行状态」" data-ds-json></textarea>
             </div>
           </div>
           <div class="border border-[#e5e6eb] rounded-[8px] mb-[16px]">
@@ -1394,7 +1507,7 @@ const wrap = openModal(html);
         </div>
         <div class="flex items-center justify-end gap-[12px] px-[24px] py-[16px] border-t border-[#f0f0f0]">
           <button class="h-[34px] px-[18px] border border-[#d9d9d9] rounded-[6px] text-[14px] text-[#333] hover:bg-[#f5f5f5]" data-ds-close>取消</button>
-          <button class="h-[34px] px-[18px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-ds-gen>生成翻译</button>
+          <button class="hidden h-[34px] px-[18px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-ds-gen>生成翻译</button>
         </div>
       </div>`;
 
@@ -1434,6 +1547,8 @@ const wrap = openModal(html);
         };
       });
       render();
+      // 已产生上行状态并解析出配置，展示「生成翻译」按钮
+      const genBtn = q('[data-ds-gen]'); if(genBtn) genBtn.classList.remove('hidden');
     }
     function typeSelect(i,type){
       const opts=[['','请选择'],['enum','枚举'],['num','数值'],['switch','开关'],['text','文本'],['array','数组']];
@@ -1516,6 +1631,8 @@ const wrap = openModal(html);
         const did=(q('[data-ds-deviceid]').value||'').trim();
         const tok=(q('[data-ds-token]').value||'').trim();
         if(!did||!tok){ showToast('请先填写 deviceId 和 token'); return; }
+        // 模拟拉取设备上行状态：回填示例 JSON（只读展示）后解析生成配置表格
+        q('[data-ds-json]').value = defaultJson;
         parseJson(); return;
       }
       const tg=t.closest('[data-ds-toggle]'); if(tg){ const i=+tg.getAttribute('data-ds-toggle'); rows[i].collapsed=!rows[i].collapsed; render(); return; }
@@ -1532,7 +1649,6 @@ const wrap = openModal(html);
         const box = boxes[boxes.length-1];
         if(box){ box.value = out; }
         wrap.remove();
-        showToast('翻译模板已写回运行时配置');
       }
     });
     wrap.addEventListener('input', e=>{
@@ -1555,7 +1671,6 @@ const wrap = openModal(html);
         return;
       }
     });
-    parseJson();
   }
 
   /* ---------- 交互策略区 ---------- */
