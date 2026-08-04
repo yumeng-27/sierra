@@ -40,7 +40,7 @@ function App() {
 
   return (
     <div 
-      className="w-full mx-auto min-h-[1024px] bg-[#f4f5f7]"
+      className="w-full mx-auto h-screen overflow-hidden bg-[#f4f5f7]"
       data-page-key={currentPage}
       data-ai-alt="应用整体容器"
       data-ai-changelog-id="page-level-index"

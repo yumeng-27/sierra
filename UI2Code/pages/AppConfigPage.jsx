@@ -46,6 +46,13 @@ function AppConfigPage() {
   const [isMcpServiceModalOpen, setIsMcpServiceModalOpen] = useState(false);
   const [customSkills, setCustomSkills] = useState([]);
   const [isProductInfoExpanded, setIsProductInfoExpanded] = useState(true);
+  const [isDebugPanelCollapsed, setIsDebugPanelCollapsed] = useState(false);
+  const [isDebugSettingsOpen, setIsDebugSettingsOpen] = useState(false);
+  const [debugDeviceType, setDebugDeviceType] = useState('真实设备');
+  const [debugDeviceId, setDebugDeviceId] = useState('');
+  const [debugToken, setDebugToken] = useState('');
+  const [debugLocation, setDebugLocation] = useState('');
+  const [debugLanguage, setDebugLanguage] = useState('中文');
   const [saveToast, setSaveToast] = useState('');
   const [mcpServices, setMcpServices] = useState([
     { id: 'mcp-weather', name: '天气服务', desc: 'weather.mcp.jd.com' }
@@ -945,23 +952,161 @@ function AppConfigPage() {
           )}
 
           {/* 右侧预览区 */}
-          <div className="w-[360px] bg-white border-l border-[#e5e5e5] flex flex-col">
+          {isDebugPanelCollapsed ? (
+            <div className="w-[44px] bg-white border-l border-[#e5e5e5] flex flex-col items-center py-[16px] shrink-0" data-ai-alt="调试窗收起态">
+              <button
+                type="button"
+                className="w-[28px] h-[28px] flex items-center justify-center rounded-[4px] text-[#666] hover:text-[#1473e6] hover:bg-[#f5f5f5]"
+                onClick={() => setIsDebugPanelCollapsed(false)}
+                data-ai-alt="展开调试窗"
+                title="展开预览调试"
+              >
+                <i className="fas fa-angle-left text-[14px]"></i>
+              </button>
+              <div className="mt-[12px] text-[13px] text-[#666] font-medium" style={{ writingMode: 'vertical-rl' }}>预览调试</div>
+            </div>
+          ) : (
+          <div className="w-[360px] bg-white border-l border-[#e5e5e5] flex flex-col shrink-0 relative">
             <div className="p-[16px] border-b border-[#e5e5e5] flex items-center">
+              <button
+                type="button"
+                className="w-[28px] h-[28px] flex items-center justify-center rounded-[4px] text-[#666] hover:text-[#1473e6] hover:bg-[#f5f5f5] mr-[8px]"
+                onClick={() => setIsDebugPanelCollapsed(true)}
+                data-ai-alt="收起调试窗"
+                title="收起预览调试"
+              >
+                <i className="fas fa-angle-right text-[14px]"></i>
+              </button>
               <span className="text-[16px] font-medium text-[#333]">预览调试</span>
-              <i className="fas fa-cog text-[#1473e6] ml-[8px] cursor-pointer" data-ai-alt="预览设置"></i>
+              <i
+                className="fas fa-cog text-[#1473e6] ml-[8px] cursor-pointer"
+                data-ai-alt="预览设置"
+                onClick={() => setIsDebugSettingsOpen(!isDebugSettingsOpen)}
+                title="预览设置"
+              ></i>
             </div>
-            <div className="flex-1 bg-[#fafafa] flex flex-col items-center justify-center p-[24px]">
-              <div className="w-[80px] h-[80px] bg-white rounded-full flex items-center justify-center shadow-sm mb-[16px] relative">
-                <i className="fas fa-robot text-[40px] text-[#1473e6]"></i>
+            {isDebugSettingsOpen ? (
+              <div className="flex-1 bg-white overflow-y-auto px-[16px] py-[16px]" data-ai-alt="调试设置面板" data-ai-changelog-id="feature-debug-settings-panel" data-ai-changelog-title="调试设置面板" data-ai-changelog-desc="点击齿轮展开设备连接、高级参数、位置语言等调试配置">
+                {/* 设备连接 */}
+                <div className="mb-[20px]">
+                  <div className="flex items-center mb-[12px]">
+                    <i className="fas fa-cog text-[#1473e6] mr-[6px] text-[14px]"></i>
+                    <span className="text-[15px] font-medium text-[#333]">设备连接</span>
+                    <span className="ml-[8px] px-[6px] py-[2px] bg-[#eef2ff] text-[#5b7cfa] rounded-[4px] text-[12px]">小家 IoT</span>
+                  </div>
+                  <div className="border-t border-[#f0f0f0] pt-[12px] space-y-[14px]">
+                    <div>
+                      <label className="block text-[14px] text-[#333] mb-[6px]">设备类型</label>
+                      <div className="relative">
+                        <select
+                          value={debugDeviceType}
+                          onChange={(e) => setDebugDeviceType(e.target.value)}
+                          className="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none focus:border-[#1473e6] appearance-none bg-white"
+                          data-ai-alt="设备类型选择"
+                        >
+                          <option value="真实设备">真实设备</option>
+                          <option value="虚拟设备">虚拟设备</option>
+                        </select>
+                        <i className="fas fa-chevron-down absolute right-[12px] top-1/2 -translate-y-1/2 text-[12px] text-[#999] pointer-events-none"></i>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[14px] text-[#333] mb-[6px]">device_id</label>
+                      <input
+                        type="text"
+                        value={debugDeviceId}
+                        onChange={(e) => setDebugDeviceId(e.target.value)}
+                        placeholder="输入 device_id"
+                        className="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none focus:border-[#1473e6]"
+                        data-ai-alt="device_id输入"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[14px] text-[#333] mb-[6px]">token</label>
+                      <input
+                        type="text"
+                        value={debugToken}
+                        onChange={(e) => setDebugToken(e.target.value)}
+                        placeholder="输入 token"
+                        className="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none focus:border-[#1473e6]"
+                        data-ai-alt="token输入"
+                      />
+                    </div>
+                    <a href="#" className="inline-block text-[13px] text-[#1473e6] hover:underline" data-ai-alt="获取设备信息链接">请联系小家 IoT 平台获取设备信息</a>
+                  </div>
+                </div>
+                {/* 高级参数（只读回显） */}
+                <div className="mb-[20px]">
+                  <div className="text-[15px] font-medium text-[#333] mb-[12px]">高级参数</div>
+                  <div className="border-t border-[#f0f0f0] pt-[12px] space-y-[14px]">
+                    {[
+                      { label: 'SessionId', value: 'ACbC7u75x7f-A4u3C5qll', required: false },
+                      { label: '应用ID', value: '11442', required: true },
+                      { label: '设备ID(同BotId)', value: '3b3fe8e35179476ba35cb8873262a0d7', required: true },
+                      { label: '企业ID', value: '100326', required: true }
+                    ].map((f, idx) => (
+                      <div key={idx}>
+                        <label className="block text-[14px] text-[#333] mb-[6px]">
+                          {f.required && <span className="text-[#f5222d] mr-[2px]">*</span>}{f.label}
+                        </label>
+                        <input
+                          type="text"
+                          value={f.value}
+                          readOnly
+                          className="w-full h-[40px] px-[12px] bg-[#f5f5f5] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#999] outline-none cursor-not-allowed"
+                          data-ai-alt={`${f.label}只读`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* 位置与语言 */}
+                <div className="mb-[8px]">
+                  <div className="space-y-[14px]">
+                    <div>
+                      <label className="block text-[14px] text-[#333] mb-[6px]">位置</label>
+                      <input
+                        type="text"
+                        value={debugLocation}
+                        onChange={(e) => setDebugLocation(e.target.value)}
+                        placeholder="请输入位置"
+                        className="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none focus:border-[#1473e6]"
+                        data-ai-alt="位置输入"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[14px] text-[#333] mb-[6px]">语言</label>
+                      <div className="relative">
+                        <select
+                          value={debugLanguage}
+                          onChange={(e) => setDebugLanguage(e.target.value)}
+                          className="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none focus:border-[#1473e6] appearance-none bg-white"
+                          data-ai-alt="语言选择"
+                        >
+                          <option value="中文">中文</option>
+                          <option value="English">English</option>
+                        </select>
+                        <i className="fas fa-chevron-down absolute right-[12px] top-1/2 -translate-y-1/2 text-[12px] text-[#999] pointer-events-none"></i>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="text-[#666] text-[14px] flex items-center">
-                <i className="far fa-comment-dots mr-[8px]"></i> 和我对话试试吧
+            ) : (
+              <div className="flex-1 bg-[#fafafa] flex flex-col items-center justify-center p-[24px]">
+                <div className="w-[80px] h-[80px] bg-white rounded-full flex items-center justify-center shadow-sm mb-[16px] relative">
+                  <i className="fas fa-robot text-[40px] text-[#1473e6]"></i>
+                </div>
+                <div className="text-[#666] text-[14px] flex items-center">
+                  <i className="far fa-comment-dots mr-[8px]"></i> 和我对话试试吧
+                </div>
               </div>
-            </div>
+            )}
             <div className="p-[16px] bg-white border-t border-[#e5e5e5]">
               <button className="w-full h-[40px] bg-[#1473e6] text-white rounded-[4px] text-[14px] hover:bg-[#115ebb]" data-ai-alt="开始测试按钮">开始测试</button>
             </div>
           </div>
+          )}
         </div>
       </div>
     </Layout>

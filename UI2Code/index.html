@@ -28,7 +28,7 @@
   </style>
 </head>
 <body class="bg-[#f4f5f7]">
-  <div id="app" class="w-full mx-auto min-h-[1024px] bg-[#f4f5f7]"></div>
+  <div id="app" class="w-full mx-auto h-screen overflow-hidden bg-[#f4f5f7]"></div>
 
   <!-- 弹窗/抽屉挂载点 -->
   <div id="overlay-root"></div>
@@ -79,10 +79,11 @@
 
   /* ---------- 侧边栏 Layout ---------- */
   function layoutHtml(activeMenu, isResourceOpen, contentHtml) {
+    var collapsed = sidebarCollapsed;
     const menuItem = (name, icon, label, page) => {
       const active = activeMenu === name;
-      return `<div class="flex items-center px-[12px] py-[10px] text-[14px] cursor-pointer rounded-[4px] ${active ? 'text-[#1473e6] bg-[#eef5fd] font-medium' : 'hover:bg-[#f5f5f5]'}" data-nav="${page || ''}" data-menu="${name}">
-        <i class="fas ${icon} w-[20px] text-center mr-[8px]"></i> ${label}
+      return `<div class="flex items-center ${collapsed ? 'justify-center' : ''} px-[12px] py-[10px] text-[14px] cursor-pointer rounded-[4px] ${active ? 'text-[#1473e6] bg-[#eef5fd] font-medium' : 'hover:bg-[#f5f5f5]'}" data-nav="${page || ''}" data-menu="${name}" title="${label}">
+        <i class="fas ${icon} w-[20px] text-center ${collapsed ? '' : 'mr-[8px]'}"></i>${collapsed ? '' : ' ' + label}
       </div>`;
     };
     const subs = ['知识库','技能库','MCP服务','指令库','音色库','型号库'];
@@ -94,34 +95,39 @@
     const resourceActive = activeMenu.startsWith('资源管理');
     return `
     <div class="flex h-screen w-full bg-[#f4f5f7] font-sans text-[#333]">
-      <aside class="w-[240px] bg-white border-r border-[#e5e5e5] flex flex-col">
-        <div class="h-[60px] flex items-center px-[24px] border-b border-[#e5e5e5]">
-          <span class="text-[20px] font-bold text-[#1473e6]">JoyInside</span>
-          <span class="ml-[8px] bg-[#1473e6] text-white text-[12px] px-[6px] py-[2px] rounded-[4px]">内测版</span>
+      <aside class="${collapsed ? 'w-[64px]' : 'w-[240px]'} bg-white border-r border-[#e5e5e5] flex flex-col shrink-0 relative transition-all duration-200">
+        <div class="h-[60px] flex items-center border-b border-[#e5e5e5] ${collapsed ? 'justify-center px-0' : 'px-[24px]'}">
+          ${collapsed
+            ? `<span class="text-[18px] font-bold text-[#1473e6]">J</span>`
+            : `<span class="text-[20px] font-bold text-[#1473e6]">JoyInside</span>
+               <span class="ml-[8px] bg-[#1473e6] text-white text-[12px] px-[6px] py-[2px] rounded-[4px]">内测版</span>`}
         </div>
-        <div class="p-[16px]">
-          <div class="flex items-center justify-between p-[8px] bg-[#f5f5f5] rounded-[4px] cursor-pointer mb-[16px]">
+        <div class="absolute top-[74px] -right-[10px] w-[20px] h-[20px] bg-white border border-[#e5e5e5] rounded-full flex items-center justify-center cursor-pointer text-[#999] hover:text-[#1473e6] hover:border-[#1473e6] shadow-sm z-30" data-toggle-sidebar="1" title="${collapsed ? '展开导航' : '收起导航'}">
+          <i class="fas ${collapsed ? 'fa-angle-right' : 'fa-angle-left'} text-[12px]"></i>
+        </div>
+        <div class="${collapsed ? 'p-[8px]' : 'p-[16px]'}">
+          ${collapsed ? '' : `<div class="flex items-center justify-between p-[8px] bg-[#f5f5f5] rounded-[4px] cursor-pointer mb-[16px]">
             <span class="text-[14px]">苏大强</span>
             <i class="fas fa-chevron-down text-[12px] text-[#666]"></i>
-          </div>
+          </div>`}
           <nav class="space-y-[4px]">
             ${menuItem('首页','fa-home','首页','index')}
             ${menuItem('产品管理','fa-th-large','产品管理','index')}
-            <div class="flex items-center justify-between px-[12px] py-[10px] text-[14px] cursor-pointer rounded-[4px] ${resourceActive ? 'text-[#1473e6] bg-[#eef5fd] font-medium' : 'hover:bg-[#f5f5f5]'}" data-toggle-resource="1">
-              <div class="flex items-center"><i class="fas fa-folder-open w-[20px] text-center mr-[8px]"></i> 资源管理</div>
-              <i class="fas fa-chevron-${isResourceOpen ? 'up':'down'} text-[12px] text-[#666]"></i>
+            <div class="flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-[12px] py-[10px] text-[14px] cursor-pointer rounded-[4px] ${resourceActive ? 'text-[#1473e6] bg-[#eef5fd] font-medium' : 'hover:bg-[#f5f5f5]'}" data-toggle-resource="1" title="资源管理">
+              <div class="flex items-center"><i class="fas fa-folder-open w-[20px] text-center ${collapsed ? '' : 'mr-[8px]'}"></i>${collapsed ? '' : ' 资源管理'}</div>
+              ${collapsed ? '' : `<i class="fas fa-chevron-${isResourceOpen ? 'up':'down'} text-[12px] text-[#666]"></i>`}
             </div>
-            ${isResourceOpen ? `<div class="pl-[40px] py-[4px] space-y-[8px]">${subHtml}</div>` : ''}
+            ${(!collapsed && isResourceOpen) ? `<div class="pl-[40px] py-[4px] space-y-[8px]">${subHtml}</div>` : ''}
             ${menuItem('设备管理','fa-microchip','设备管理','deviceManage')}
-            <div class="flex items-center justify-between px-[12px] py-[10px] text-[14px] cursor-pointer rounded-[4px] hover:bg-[#f5f5f5]">
-              <div class="flex items-center"><i class="fas fa-code w-[20px] text-center mr-[8px]"></i> 开发者中心</div>
-              <i class="fas fa-chevron-down text-[12px] text-[#666]"></i>
+            <div class="flex items-center ${collapsed ? 'justify-center' : 'justify-between'} px-[12px] py-[10px] text-[14px] cursor-pointer rounded-[4px] hover:bg-[#f5f5f5]" title="开发者中心">
+              <div class="flex items-center"><i class="fas fa-code w-[20px] text-center ${collapsed ? '' : 'mr-[8px]'}"></i>${collapsed ? '' : ' 开发者中心'}</div>
+              ${collapsed ? '' : `<i class="fas fa-chevron-down text-[12px] text-[#666]"></i>`}
             </div>
           </nav>
         </div>
-        <div class="mt-auto p-[16px] border-t border-[#e5e5e5]">
-          <div class="flex items-center px-[12px] py-[10px] text-[14px] cursor-pointer hover:bg-[#f5f5f5] rounded-[4px]">
-            <i class="far fa-user w-[20px] text-center mr-[8px]"></i> 个人信息
+        <div class="mt-auto ${collapsed ? 'p-[8px]' : 'p-[16px]'} border-t border-[#e5e5e5]">
+          <div class="flex items-center ${collapsed ? 'justify-center' : ''} px-[12px] py-[10px] text-[14px] cursor-pointer hover:bg-[#f5f5f5] rounded-[4px]" title="个人信息">
+            <i class="far fa-user w-[20px] text-center ${collapsed ? '' : 'mr-[8px]'}"></i>${collapsed ? '' : ' 个人信息'}
           </div>
         </div>
       </aside>
@@ -143,6 +149,7 @@
 
   /* ---------- 页面渲染分发 ---------- */
   let resourceMenuOpen = false;
+  let sidebarCollapsed = false;
   function renderApp() {
     const page = State.currentPage;
     if (isResourcePage(page)) resourceMenuOpen = true;
@@ -164,6 +171,8 @@
     }
     const toggle = e.target.closest('[data-toggle-resource]');
     if (toggle) { resourceMenuOpen = !resourceMenuOpen; renderApp(); }
+    const sbToggle = e.target.closest('[data-toggle-sidebar]');
+    if (sbToggle) { sidebarCollapsed = !sidebarCollapsed; renderApp(); return; }
   });
 
   // 占位：页面内容渲染（后续注入）
@@ -872,15 +881,25 @@ const wrap = openModal(html);
     ],
     activeAgentId: 'agent-default',
     skillDropdownOpen: false,
+    toolDropdownOpen: false,
+    toolInsertPos: null,
     promptDirty: false,
     commands: [{ id:'cmd-1', name:'制氧机-案例', type:'自定义' }],
     tools: [
+      { name:'iot_get_device_shadow', desc:'IoT工具：获取设备影子状态<br><br>Args:<br>&nbsp;&nbsp;request_id: 请求ID（必传）<br>&nbsp;&nbsp;vendor_id: 厂商ID（必传）<br>&nbsp;&nbsp;bot_id: 机器人ID（必传）<br>&nbsp;&nbsp;did: 设备ID（必传）<br>&nbsp;&nbsp;device_token: 设备令牌（必传）<br>&nbsp;&nbsp;use_mock: 是否使用模拟实现（选填）<br><br>Returns:<br>&nbsp;&nbsp;设备影子状态', params:[{k:'request_id',t:'必传'},{k:'vendor_id',t:'必传'},{k:'bot_id',t:'必传'},{k:'pin',t:'-'},{k:'home_id',t:'-'},{k:'did',t:'必传'},{k:'device_token',t:'必传'},{k:'use_mock',t:'选填'}], ret:'typing.dict[str,typing.Any]', hasRuntimeConfig:true },
       { name:'range_check', desc:'数值/枚举范围与条件取值校验', params:[{k:'value',t:'number|string'},{k:'range',t:'object'}], ret:'{ ok:boolean, fixed?:值 }' },
       { name:'cron_parse', desc:'自然语言时间解析为 cron 表达式', params:[{k:'text',t:'string'}], ret:'{ cron:string, next?:string }' },
       { name:'device_capability_query', desc:'查询设备能力清单与取值范围', params:[{k:'deviceId',t:'string'}], ret:'{ caps:object[] }' },
       { name:'unit_convert', desc:'单位换算（温度/亮度/百分比等）', params:[{k:'value',t:'number'},{k:'from',t:'string'},{k:'to',t:'string'}], ret:'{ value:number, unit:string }' }
     ],
     acSetTab: 'list',
+    debugCollapsed: false,
+    debugSettingsOpen: false,
+    debugDeviceType: '真实设备',
+    debugDeviceId: '',
+    debugToken: '',
+    debugLocation: '',
+    debugLanguage: '中文',
     scheduleBySet: {
       'set-1': { create:true, cancel:false, query:false, once:true, cycle:false, grains:{ hour:false, day:false, week:false, month:false }, cmds:[{ name:'灯', code:'light', type:'控制项' }] }
     },
@@ -1091,20 +1110,65 @@ const wrap = openModal(html);
         <span class="ml-[10px] px-[8px] py-[2px] text-[12px] text-[#52c41a] bg-[#f6ffed] border border-[#b7eb8f] rounded-[4px]">${c.type}</span>
         <i class="fas fa-times ml-[10px] text-[#ccc] opacity-0 group-hover:opacity-100 hover:text-[#ff4d4f]" data-ac-cmd-del="${c.id}"></i>
       </div>`).join('');
-    return `
+     return `
     <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
       <div class="flex items-center mb-[16px]">
         <h2 class="text-[16px] font-medium text-[#333] mr-[16px]">指令</h2>
-        <span class="text-[14px] text-[#1473e6] cursor-pointer" data-ac-cmd-add><i class="fas fa-plus mr-[4px]"></i>添加指令</span>
+        <div class="relative">
+          <span class="text-[14px] text-[#1473e6] cursor-pointer" data-ac-cmd-add><i class="fas fa-plus mr-[4px]"></i>添加指令</span>
+          ${AC.cmdDropdownOpen ? acAddCommandDropdown() : ''}
+        </div>
       </div>
       <div class="flex flex-wrap">${cards}</div>
     </div>`;
+  }
+
+  /* ---------- 添加指令：按钮下方下拉框 ---------- */
+  function acAddCommandDropdown(){
+    const esc = v => String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    if(!AC.cmdDropdownExpanded) AC.cmdDropdownExpanded = { sys:true, mine:true };
+    const expanded = AC.cmdDropdownExpanded;
+    // 指令分组：系统指令（内置）+ 我的指令（来自已配置指令集）
+    const groups = [
+      { id:'sys', name:'系统指令', items:[
+        { name:'退出对话', type:'系统' },
+        { name:'电量查询', type:'系统' },
+    { name:'音量调节', type:'系统' }
+      ]},
+      { id:'mine', name:'我的指令', items:(AC.instructionSets||[]).map(s=>({ name:s.name, type:'自定义' })) }
+    ];
+    const chosen = new Set(AC.commands.map(c=>c.name));
+
+    const tree = groups.map(g=>{
+      const caret = expanded[g.id] ? 'fa-caret-down' : 'fa-caret-right';
+      const children = expanded[g.id] ? g.items.map(it=>{
+        const added = chosen.has(it.name);
+        return `<div class="flex items-center pl-[28px] pr-[12px] h-[38px] rounded-[6px] ${added?'text-[#c9cdd4] cursor-not-allowed':'text-[#333] cursor-pointer hover:bg-[#f5f7fa]'}" ${added?'':`data-ac-cmd-pick="${esc(it.name)}" data-ac-cmd-type="${esc(it.type)}"`}>
+            <span class="text-[14px]">${esc(it.name)}</span>
+            ${added?'<span class="ml-auto text-[12px] text-[#86909c]">已添加</span>':''}
+          </div>`;
+      }).join('') : '';
+      const emptyTip = (expanded[g.id] && g.items.length===0) ? `<div class="pl-[28px] py-[8px] text-[12px] text-[#c9cdd4]">暂无可选指令</div>` : '';
+      return `<div class="mb-[4px]">
+        <div class="flex items-center h-[38px] px-[8px] rounded-[6px] cursor-pointer hover:bg-[#f5f7fa]" data-ac-cmd-group="${g.id}">
+          <i class="fas ${caret} w-[16px] text-[#4e5969]"></i>
+          <span class="text-[14px] font-medium text-[#1d2129]">${g.name}</span>
+        </div>${children}${emptyTip}
+      </div>`;
+    }).join('');
+
+    return `<div class="absolute left-0 top-[calc(100%+6px)] z-[50] w-[260px] max-h-[360px] overflow-y-auto bg-white border border-[#e5e6eb] rounded-[8px] shadow-lg p-[8px]" data-ac-cmd-dropdown>${tree}</div>`;
   }
 
   /* ---------- AIoT指令控制区（standard版）---------- */
   function acAiotHtml(){
     if(State.currentAppVersion!=='standard') return '';
     const enabled = AC.aiotEnabled;
+    // AIOT 能力（指令集/提示词/工具/状态翻译）为产品级共享配置，仅默认智能体可编辑；
+    // 非默认智能体下：AIoT 开关与技能仍可用，其余编辑区置灰只读并引导跳转至默认智能体
+    const _agent = acActiveAgent();
+    const acReadonly = !!(_agent && !_agent.isDefault);
+    const _defAgent = AC.agents.find(a=>a.isDefault);
     const promptRadio = (val,label)=>`
       <label class="flex items-center cursor-pointer mr-[32px]">
         <input type="radio" name="ac-prompt" class="mr-[8px]" ${AC.promptType===val?'checked':''} data-ac-prompt="${val}">
@@ -1145,9 +1209,14 @@ const wrap = openModal(html);
     const step = (key,title,desc)=>{
       let inner = '';
       const isTool = key==='tool';
-      const toolBar = isTool ? `<div class="flex items-center justify-between mb-[8px]">
-            <span class="text-[12px] text-[#999]">工具执行层提示词支持使用系统工具，暂不支持自定义工具</span>
-            <span class="text-[#1473e6] text-[13px] cursor-pointer shrink-0 ml-[12px]" data-ac-tool-add><i class="fas fa-plus mr-[4px]"></i>添加工具</span>
+      const toolDropdown = (isTool && AC.toolDropdownOpen) ? `
+            <div class="fixed inset-0 z-10" data-ac-tool-mask></div>
+            <div class="absolute top-[24px] right-0 w-[260px] bg-white border border-[#e5e5e5] rounded-[8px] shadow-lg z-20 py-[8px] max-h-[360px] overflow-y-auto">
+              ${(AC.tools||[]).map(tl=>`<div class="px-[16px] py-[10px] text-[14px] text-[#333] cursor-pointer hover:bg-[#f5f5f5]" data-ac-tool-pick="${tl.name}">${tl.name}</div>`).join('')}
+            </div>`:'';
+      const toolBar = isTool ? `<div class="flex items-center justify-end mb-[8px] relative">
+            <span class="text-[#1473e6] text-[13px] cursor-pointer" data-ac-tool-add><i class="fas fa-plus mr-[4px]"></i>添加工具</span>
+            ${toolDropdown}
           </div>`:'';
       if(AC.expandedSteps[key]){
         if(isAuto && !hasSet){
@@ -1185,26 +1254,6 @@ const wrap = openModal(html);
         ${AC.isTaskPlannerEnabled?step('planner','2. 任务规划器','完成设备能力匹配、参数校验、澄清与闲聊分流，并生成任务规划。简单控制（仅单步控制，无需多轮澄清）可关闭任务规划器，可提高响应速度'):''}
         ${step('tool',(AC.isTaskPlannerEnabled?'3':'2')+'. 工具执行','将任务转化为可执行的标准工具调用')}
       </div>`;
-    // 设备上行状态：翻译后的状态提示词，喂给总系统提示词（可展开收起框）
-    const dsVal = AC.deviceStatePrompt || '';
-    const dsInner = AC.expandedSteps.devstate ? `
-        <div class="px-[16px] pb-[16px]">
-          <div class="flex items-center justify-end mb-[8px]">
-            <span class="text-[#1473e6] text-[13px] cursor-pointer shrink-0" data-ac-devstate-edit><i class="fas fa-cog mr-[4px]"></i>解析并配置翻译</span>
-          </div>
-          <textarea class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] font-mono leading-[1.6] bg-[#f7f8fa]" readonly placeholder="点击右上角「解析并配置翻译」，配置完成后翻译模板将写入此处" data-ac-devstate-box>${dsVal}</textarea>
-        </div>`:'';
-    const deviceStateBox = `
-      <div class="mt-[16px] border border-[#f0f0f0] rounded-[8px]">
-        <div class="flex items-center justify-between px-[16px] py-[12px] cursor-pointer" data-ac-step="devstate">
-          <div class="pr-[12px]">
-            <div class="text-[14px] text-[#333]">${AC.isTaskPlannerEnabled?'4':'3'}. 设备上行状态</div>
-            <div class="text-[12px] text-[#999] mt-[2px] leading-[1.5]">设备上报状态翻译成的自然语言，会并入系统提示词供模型理解设备状态</div>
-          </div>
-          <i class="fas fa-chevron-${AC.expandedSteps.devstate?'up':'down'} text-[#999] shrink-0"></i>
-        </div>
-      ${dsInner}
-      </div>`;
     const dirtyBanner = (AC.promptDirty && isAuto && hasSet) ? `
       <div class="flex items-center justify-between px-[16px] py-[10px] mt-[16px] bg-[#fffbe6] border border-[#ffe58f] rounded-[8px]">
         <div class="flex items-center text-[13px] text-[#664d00]">
@@ -1218,42 +1267,77 @@ const wrap = openModal(html);
       </div>`:'';
     const body = enabled ? `
       <div class="mt-[16px]">
+        <div class="text-[14px] text-[#333] mb-[12px]">提示词</div>
         <div class="flex items-center">
           ${promptRadio('auto','根据指令集生成')}
           ${promptRadio('custom','自定义提示词')}
         </div>
         ${setBar}
         ${dirtyBanner}
-        <div class="flex items-center justify-between mt-[20px] pt-[16px] border-t border-[#f0f0f0]">
+        <div class="flex items-center justify-between mt-[20px]">
           <div class="flex items-center">
             <span class="text-[14px] text-[#333] mr-[12px]">任务规划器</span>
             ${switchHtml('ac-planner', AC.isTaskPlannerEnabled)}
           </div>
-          <span class="text-[#1473e6] text-[13px] cursor-pointer" data-ac-tutorial><i class="fas fa-book mr-[4px]"></i>编写教程</span>
+          <div class="flex items-center">
+            <span class="text-[#1473e6] text-[13px] cursor-pointer mr-[16px]" data-ac-tool-list><i class="fas fa-list mr-[4px]"></i>工具列表</span>
+            <span class="text-[#1473e6] text-[13px] cursor-pointer" data-ac-tutorial><i class="fas fa-book mr-[4px]"></i>编写教程</span>
+          </div>
         </div>
         ${fillerBox}
         ${flow}
-        ${deviceStateBox}
       </div>`:'';
+    // 非默认智能体：产品级共享配置说明 + 跳转默认智能体入口
+    const readonlyBanner = (acReadonly && enabled) ? `
+      <div class="flex items-center justify-between mt-[16px]">
+        <div class="flex items-center text-[13px] text-[#334155]">
+          <i class="fas fa-info-circle text-[#1473e6] mr-[8px]"></i>
+          AIOT 能力（指令集、提示词、工具、状态翻译）为产品级共享配置，此处仅供查看。当前智能体可控制「开启 AIoT」与技能，如需修改能力请前往默认智能体
+        </div>
+        ${_defAgent?`<span class="shrink-0 ml-[16px] text-[13px] text-[#1473e6] cursor-pointer hover:underline whitespace-nowrap" data-ac-goto-default="${_defAgent.id}">前往默认智能体修改<i class="fas fa-angle-right ml-[3px] text-[11px]"></i></span>`:''}
+      </div>`:'';
+    // 只读时用遮罩层禁用 body 内的编辑交互（AIoT 开关在标题栏，不受影响）
+    const bodyWrap = (acReadonly && enabled)
+      ? `<div class="relative"><div class="pointer-events-none opacity-60 select-none">${body}</div></div>`
+      : body;
     return `
     <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
       <div class="flex items-center justify-between mb-[16px]">
-        <h2 class="text-[16px] font-medium text-[#333]">AIoT指令控制</h2>
+        <div class="flex items-center">
+          <h2 class="text-[16px] font-medium text-[#333]">AIoT指令控制</h2>
+        </div>
         <div class="flex items-center"><span class="text-[13px] text-[#666] mr-[12px]">开启AIoT</span>${switchHtml('ac-aiot', enabled)}</div>
       </div>
-      ${body}
+      ${readonlyBanner}
+      ${bodyWrap}
     </div>`;
   }
 
   /* ---------- 设备上行状态：解析 JSON + 配置翻译表格 弹窗 ---------- */
   function acDeviceStateModal(){
-    // 预置演示回填（实际由运营配置）
+    // 预置演示回填（实际由运营配置），key 支持嵌套点路径
     const preset = {
-      bedsteadStatus:{ name:'预设模式', type:'enum', map:{'1':'坐姿','2':'平躺模式','3':'零重力'} },
-      underBedLight: { name:'床底灯',   type:'switch', map:{'0':'关闭','1':'开启'} },
-      volume:        { name:'音量大小', type:'num' }
+      'data.bedsteadStatus':{ name:'预设模式', type:'enum', map:{'1':'坐姿','2':'平躺模式','3':'零重力'} },
+      'data.underBedLight': { name:'床底灯',   type:'switch', map:{'0':'关闭','1':'开启'} },
+      'data.volume':        { name:'音量大小', type:'num' },
+      'data.mattress.left.monitor.heartRate':  { name:'左侧心率', type:'num' },
+      'data.mattress.right.monitor.heartRate': { name:'右侧心率', type:'num' }
     };
-    const defaultJson = `{\n  "bedsteadStatus": 2,\n  "underBedLight": 1,\n  "volume": 60,\n  "backAngle": 12,\n  "airPressureLevel": 3\n}`;
+    // 无业务价值的元字段（协议外壳/时间戳等）：标识含义、值类型、映射/翻译列置空且不可编辑
+    const noValueKeys = new Set(['success','code','message','timestamp']);
+    const defaultJson = JSON.stringify({
+      success:true, code:200, message:'操作成功',
+      data:{
+        alarmList:[], backStrength:0, bedsteadStatus:2, buildInfo:'2.3', ccVersion:'1.1.38',
+        deviceId:'26486BD13D58', firmwareVersion:'2.3', footStrength:0, massageMode:1, massageRemainingTime:0,
+        mattress:{
+          left:{ currentLumbar:0, leaveBedFlatTime:3, monitor:{ bodyRevolve:0, heartRate:66, onBedPower:2585, onBedPressure:4018, respiratoryRate:11, snoreCount:0, soundPower:13, stabilityCoefficient:7, status:1 }, selfAdaptionSetting:1, status:2, supportStrength:2, tempControlLevel:2, tempControlSwitch:0, workingPercent:0 },
+          right:{ currentLumbar:0, leaveBedFlatTime:3, monitor:{ bodyRevolve:0, heartRate:59, onBedPower:3794, onBedPressure:3770, respiratoryRate:12, snoreCount:0, soundPower:150, stabilityCoefficient:4, status:1 }, selfAdaptionSetting:1, status:4, supportStrength:2, tempControlLevel:2, tempControlSwitch:0, workingPercent:0 }
+        },
+        motor1Angle:0, motor2Angle:0, motor3Angle:0, onlineStatus:0, stopSnoring:0, underBedLight:1, volume:60
+      },
+      timestamp:1785334704485
+    }, null, 2);
     let rows = [];
     const esc = v => String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
@@ -1262,7 +1346,6 @@ const wrap = openModal(html);
         <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
           <div>
             <h3 class="text-[16px] font-medium text-[#333]">设备状态翻译配置</h3>
-            <p class="text-[12px] text-[#999] mt-[2px]">独立于指令集，只消费设备上行状态 JSON：①解析上行 JSON → ②配置标识含义与值类型 → 生成翻译模板并写回（模板含 {{ data.xxx }} 占位，工程执行时按实时状态渲染）</p>
           </div>
           <i class="fas fa-times text-[#999] cursor-pointer hover:text-[#333]" data-ds-close></i>
         </div>
@@ -1272,9 +1355,19 @@ const wrap = openModal(html);
               <span class="inline-flex w-[20px] h-[20px] rounded-full bg-[#165dff] text-white text-[12px] items-center justify-center mr-[6px]">1</span>
               <span class="text-[14px] font-medium text-[#333]">查看并解析上行 JSON</span>
               <span class="text-[12px] text-[#999] ml-[8px]">设备上报的原始状态数据</span>
-              <button class="ml-auto px-[12px] py-[4px] bg-[#165dff] text-white rounded-[5px] text-[12px]" data-ds-parse>↻ 刷新并解析</button>
             </div>
             <div class="p-[16px]">
+              <div class="flex items-end flex-wrap gap-[12px] mb-[12px]">
+                <div class="flex flex-col">
+                  <label class="text-[12px] text-[#333] mb-[4px]"><span class="text-[#f5222d] mr-[2px]">*</span>deviceId</label>
+                  <input class="w-[220px] h-[32px] px-[10px] border border-[#e5e6eb] rounded-[6px] text-[12px] font-mono bg-white" placeholder="请输入设备 ID" data-ds-deviceid>
+                </div>
+                <div class="flex flex-col">
+                  <label class="text-[12px] text-[#333] mb-[4px]"><span class="text-[#f5222d] mr-[2px]">*</span>token</label>
+                  <input class="w-[220px] h-[32px] px-[10px] border border-[#e5e6eb] rounded-[6px] text-[12px] font-mono bg-white" placeholder="请输入 token" data-ds-token>
+                </div>
+                <button class="h-[32px] px-[14px] bg-[#165dff] text-white rounded-[6px] text-[12px]" data-ds-parse>获取上行状态</button>
+              </div>
               <div class="text-[12px] text-[#999] mb-[4px]">上行状态 JSON（可编辑）</div>
               <textarea class="w-full h-[150px] p-[10px] border border-[#e5e6eb] rounded-[6px] text-[12px] font-mono leading-[1.6] bg-[#fbfcfd]" data-ds-json>${esc(defaultJson)}</textarea>
             </div>
@@ -1286,23 +1379,22 @@ const wrap = openModal(html);
               <span class="text-[12px] text-[#999] ml-[8px]">翻译标识含义 + 识别值类型 / 枚举映射</span>
             </div>
             <div class="p-[16px]">
-              <table class="w-full text-[12px]" style="border-collapse:collapse">
+              <table class="w-full text-[12px]" style="border-collapse:collapse;table-layout:fixed">
                 <thead><tr class="text-[#86909c] bg-[#fafbfc]">
-                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:150px">上行字段</th>
-                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:70px">原始值</th>
-                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:150px">标识含义（显示名）</th>
-                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:110px">值类型</th>
+                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:180px">上行字段</th>
+                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:60px">原始值</th>
+                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:200px">标识含义（显示名）</th>
+                  <th class="text-left p-[8px] border-b border-[#f2f3f5]" style="width:90px">值类型</th>
                   <th class="text-left p-[8px] border-b border-[#f2f3f5]">枚举映射 / 翻译结果</th>
           </tr></thead>
                 <tbody data-ds-tb></tbody>
               </table>
-              <div class="text-[11px] text-[#86909c] mt-[8px]">值类型选「枚举/开关」时展开映射表；选「数值/文本」直接取值。</div>
             </div>
           </div>
         </div>
         <div class="flex items-center justify-end gap-[12px] px-[24px] py-[16px] border-t border-[#f0f0f0]">
           <button class="h-[34px] px-[18px] border border-[#d9d9d9] rounded-[6px] text-[14px] text-[#333] hover:bg-[#f5f5f5]" data-ds-close>取消</button>
-          <button class="h-[34px] px-[18px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-ds-gen>生成翻译并写回</button>
+          <button class="h-[34px] px-[18px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-ds-gen>生成翻译</button>
         </div>
       </div>`;
 
@@ -1314,14 +1406,37 @@ const wrap = openModal(html);
       let data;
       try { data = JSON.parse(q('[data-ds-json]').value); }
       catch(e){ showToast('JSON 解析失败：'+e.message); return; }
-      rows = Object.keys(data).map(k=>{
-        const p = preset[k];
-        return { key:k, raw:data[k], name:p?p.name:'', type:p?p.type:'', map:(p&&p.map)?{...p.map}:{} };
+      // 保留层级结构：父节点(对象容器)与叶子节点都生成行，用于树形展示与折叠
+      const flat = [];
+      const walk = (obj, prefix, depth, parentPath)=>{
+        Object.keys(obj).forEach(k=>{
+          const path = prefix ? prefix+'.'+k : k;
+          const v = obj[k];
+          if(v!==null && typeof v==='object' && !Array.isArray(v) && Object.keys(v).length>0){
+            // 非空对象 → 作为可折叠父节点，本身无业务价值（不可编辑后续列）
+            flat.push({ path, label:k, depth, parentPath, raw:'', isLeaf:false });
+            walk(v, path, depth+1, path);
+          } else {
+            // 叶子：基本类型 / 空对象 / 数组
+            const raw = Array.isArray(v) ? JSON.stringify(v) : v;
+            flat.push({ path, label:k, depth, parentPath, raw:raw, isLeaf:true });
+          }
+        });
+      };
+      walk(data, '', 0, '');
+      rows = flat.map(n=>{
+        const p = n.isLeaf ? preset[n.path] : null;
+        return {
+          key:n.path, label:n.label, depth:n.depth, parentPath:n.parentPath,
+          raw:n.raw, isLeaf:n.isLeaf, collapsed:false,
+          noValue: n.isLeaf && noValueKeys.has(n.path),
+          name:p?p.name:'', type:p?p.type:'', map:(p&&p.map)?{...p.map}:{}
+        };
       });
       render();
     }
     function typeSelect(i,type){
-      const opts=[['','请选择'],['enum','枚举'],['num','数值'],['switch','开关'],['text','文本']];
+      const opts=[['','请选择'],['enum','枚举'],['num','数值'],['switch','开关'],['text','文本'],['array','数组']];
       return `<select class="w-full border border-[#e5e6eb] rounded-[4px] px-[6px] py-[4px]" data-ds-type="${i}">`+
         opts.map(o=>`<option value="${o[0]}" ${o[0]===type?'selected':''}>${o[1]}</option>`).join('')+`</select>`;
     }
@@ -1338,32 +1453,72 @@ const wrap = openModal(html);
       }
       if(r.type==='num')  return `<div class="text-[11px] text-[#86909c]">直接取值：<b>${esc(r.raw)}</b></div>`;
       if(r.type==='text') return `<div class="text-[11px] text-[#86909c]">原样透传：<b>${esc(r.raw)}</b></div>`;
+      if(r.type==='array') return `<div class="text-[11px] text-[#86909c]">数组透传：<b class="font-mono">${esc(r.raw)}</b></div>`;
       return `<span class="text-[11px] text-[#86909c]">先选择值类型 →</span>`;
     }
     function render(){
       tb.innerHTML='';
+      // 判断某行是否被折叠祖先隐藏：任一祖先(parentPath 前缀链)处于 collapsed 即隐藏
+      const collapsedSet = new Set(rows.filter(r=>!r.isLeaf && r.collapsed).map(r=>r.key));
+      const isHidden = (r)=>{
+        let p = r.parentPath;
+        while(p){
+          if(collapsedSet.has(p)) return true;
+          const idx = p.lastIndexOf('.');
+          p = idx>=0 ? p.slice(0,idx) : '';
+        }
+        return false;
+      };
       rows.forEach((r,i)=>{
+        if(isHidden(r)) return;
         const tr=document.createElement('tr');
-        tr.innerHTML =
-          `<td class="p-[8px] border-b border-[#f2f3f5] align-top"><span class="font-mono bg-[#f2f3f5] px-[5px] py-[1px] rounded">${esc(r.key)}</span></td>`+
-          `<td class="p-[8px] border-b border-[#f2f3f5] align-top text-[#86909c]">${esc(r.raw)}</td>`+
-          `<td class="p-[8px] border-b border-[#f2f3f5] align-top"><input class="w-full border border-[#e5e6eb] rounded-[4px] px-[6px] py-[4px]" value="${esc(r.name)}" placeholder="如：预设模式" data-ds-name="${i}"></td>`+
-          `<td class="p-[8px] border-b border-[#f2f3f5] align-top">${typeSelect(i,r.type)}</td>`+
-          `<td class="p-[8px] border-b border-[#f2f3f5] align-top">${valueCell(i,r)}</td>`;
+        const pad = 8 + r.depth*16;
+        // 上行字段：父节点带折叠加减号，叶子仅显示末段名
+        let fieldCell;
+        if(!r.isLeaf){
+          const icon = r.collapsed ? '＋' : '－';
+          fieldCell = `<td class="p-[8px] border-b border-[#f2f3f5] align-top" style="padding-left:${pad}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">`+
+            `<span class="inline-flex w-[16px] h-[16px] items-center justify-center mr-[4px] border border-[#c9cdd4] rounded-[3px] text-[#4e5969] cursor-pointer select-none" data-ds-toggle="${i}">${icon}</span>`+
+            `<span class="font-medium text-[#4e5969]">${esc(r.label)}</span></td>`;
+        } else {
+          fieldCell = `<td class="p-[8px] border-b border-[#f2f3f5] align-top" style="padding-left:${pad+20}px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(r.key)}"><span class="font-mono bg-[#f2f3f5] px-[5px] py-[1px] rounded">${esc(r.label)}</span></td>`;
+        }
+        if(r.isLeaf && !r.noValue){
+          tr.innerHTML = fieldCell+
+            `<td class="p-[8px] border-b border-[#f2f3f5] align-top text-[#86909c]">${esc(r.raw)}</td>`+
+            `<td class="p-[8px] border-b border-[#f2f3f5] align-top"><input class="w-full border border-[#e5e6eb] rounded-[4px] px-[6px] py-[4px]" value="${esc(r.name)}" placeholder="如：预设模式" data-ds-name="${i}"></td>`+
+            `<td class="p-[8px] border-b border-[#f2f3f5] align-top">${typeSelect(i,r.type)}</td>`+
+            `<td class="p-[8px] border-b border-[#f2f3f5] align-top">${valueCell(i,r)}</td>`;
+        } else {
+          // 父节点(容器) 或 无业务价值叶子：后续列置空且不可编辑
+          const rawCell = r.isLeaf ? `<td class="p-[8px] border-b border-[#f2f3f5] align-top text-[#86909c]">${esc(r.raw)}</td>` : `<td class="p-[8px] border-b border-[#f2f3f5] align-top text-[#c9cdd4]">—</td>`;
+          tr.innerHTML = fieldCell+ rawCell+
+            `<td class="p-[8px] border-b border-[#f2f3f5] align-top text-[#c9cdd4]">—</td>`+
+            `<td class="p-[8px] border-b border-[#f2f3f5] align-top text-[#c9cdd4]">—</td>`+
+            `<td class="p-[8px] border-b border-[#f2f3f5] align-top text-[#c9cdd4]">—</td>`;
+        }
         tb.appendChild(tr);
       });
     }
     // 生成 Jinja2 模板片段：数值/文本直接取值，枚举/开关走 <key>_map 映射
     function tplExpr(r){
-      if(r.type==='enum'||r.type==='switch') return `{{ ${r.key}_map[data.${r.key} | string] }}`;
-      if(r.type==='num'||r.type==='text')    return `{{ data.${r.key} }}`;
+      // r.key 已是完整点路径（如 data.volume、data.mattress.left.monitor.heartRate）
+      const mapVar = r.key.split('.').join('_')+'_map'; // 映射变量名去点，避免 Jinja 变量名非法
+      if(r.type==='enum'||r.type==='switch') return `{{ ${mapVar}[${r.key} | string] }}`;
+      if(r.type==='num'||r.type==='text'||r.type==='array')    return `{{ ${r.key} }}`;
       return null;
     }
 
     wrap.addEventListener('click', e=>{
       const t=e.target;
       if(t.closest('[data-ds-close]')){ wrap.remove(); return; }
-      if(t.closest('[data-ds-parse]')){ parseJson(); return; }
+      if(t.closest('[data-ds-parse]')){
+        const did=(q('[data-ds-deviceid]').value||'').trim();
+        const tok=(q('[data-ds-token]').value||'').trim();
+        if(!did||!tok){ showToast('请先填写 deviceId 和 token'); return; }
+        parseJson(); return;
+      }
+      const tg=t.closest('[data-ds-toggle]'); if(tg){ const i=+tg.getAttribute('data-ds-toggle'); rows[i].collapsed=!rows[i].collapsed; render(); return; }
       const add=t.closest('[data-ds-mapadd]'); if(add){ rows[+add.getAttribute('data-ds-mapadd')].map['']=''; render(); return; }
       const del=t.closest('[data-ds-mapdel]'); if(del){ delete rows[+del.getAttribute('data-ds-mapdel')].map[del.getAttribute('data-ds-dcode')]; render(); return; }
       if(t.closest('[data-ds-gen]')){
@@ -1371,11 +1526,13 @@ const wrap = openModal(html);
         // 模板句子：显示名={{ 表达式 }}
         const tplParts = valid.map(r=>`${r.name}=${tplExpr(r)}`).filter(Boolean);
         const out = tplParts.length ? '> **当前设备状态**：'+tplParts.join(' ') : '';
-        AC.deviceStatePrompt = out;
+        if(!tplParts.length){ showToast('暂无可生成内容，请先填写显示名并选择值类型'); return; }
+        // 写回到当前打开抽屉的「运行时配置」编辑框
+        const boxes = document.querySelectorAll('[data-tool-runtime]');
+        const box = boxes[boxes.length-1];
+        if(box){ box.value = out; }
         wrap.remove();
-        if(!tplParts.length) showToast('暂无可生成内容，请先填写显示名并选择值类型');
-        else showToast('翻译模板已写回');
-        renderApp();
+        showToast('翻译模板已写回运行时配置');
       }
     });
     wrap.addEventListener('input', e=>{
@@ -1443,11 +1600,87 @@ const wrap = openModal(html);
           </div>
         </div>
       </div>`;
-    const preview = `
-      <div class="w-[360px] flex-shrink-0 border-l border-[#f0f0f0] bg-white flex flex-col items-center justify-center">
-        <i class="fas fa-robot text-[48px] text-[#d9d9d9] mb-[16px]"></i>
-        <div class="text-[14px] text-[#999] mb-[16px]">和我对话试试吧</div>
-        <button class="px-[24px] h-[36px] bg-[#1473e6] text-white text-[14px] rounded-[6px]">开始测试</button>
+    const preview = AC.debugCollapsed
+      ? `
+      <div class="w-[44px] flex-shrink-0 border-l border-[#f0f0f0] bg-white flex flex-col items-center py-[16px]">
+        <div class="w-[28px] h-[28px] flex items-center justify-center rounded-[4px] text-[#666] hover:text-[#1473e6] hover:bg-[#f5f5f5] cursor-pointer" data-debug-toggle="1" title="展开预览调试">
+          <i class="fas fa-angle-left text-[14px]"></i>
+        </div>
+        <div class="mt-[12px] text-[13px] text-[#666] font-medium" style="writing-mode:vertical-rl;">预览调试</div>
+      </div>`
+      : `
+      <div class="w-[360px] flex-shrink-0 border-l border-[#f0f0f0] bg-white flex flex-col">
+        <div class="p-[16px] border-b border-[#f0f0f0] flex items-center">
+          <div class="w-[28px] h-[28px] flex items-center justify-center rounded-[4px] text-[#666] hover:text-[#1473e6] hover:bg-[#f5f5f5] cursor-pointer mr-[8px]" data-debug-toggle="1" title="收起预览调试">
+            <i class="fas fa-angle-right text-[14px]"></i>
+          </div>
+          <span class="text-[16px] font-medium text-[#333]">预览调试</span>
+          <i class="fas fa-cog text-[#1473e6] ml-[8px] cursor-pointer" data-debug-settings="1" title="预览设置"></i>
+        </div>
+        ${AC.debugSettingsOpen ? `
+        <div class="flex-1 overflow-y-auto px-[16px] py-[16px] bg-white">
+          <div class="mb-[20px]">
+            <div class="flex items-center mb-[12px]">
+              <i class="fas fa-cog text-[#1473e6] mr-[6px] text-[14px]"></i>
+      <span class="text-[15px] font-medium text-[#333]">设备连接</span>
+              <span class="ml-[8px] px-[6px] py-[2px] bg-[#eef2ff] text-[#5b7cfa] rounded-[4px] text-[12px]">小家 IoT</span>
+            </div>
+            <div class="border-t border-[#f0f0f0] pt-[12px] space-y-[14px]">
+              <div>
+                <label class="block text-[14px] text-[#333] mb-[6px]">设备类型</label>
+                <div class="relative">
+                  <select class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none appearance-none bg-white" data-debug-field="debugDeviceType">
+                    <option value="真实设备" ${AC.debugDeviceType==='真实设备'?'selected':''}>真实设备</option>
+                    <option value="虚拟设备" ${AC.debugDeviceType==='虚拟设备'?'selected':''}>虚拟设备</option>
+                  </select>
+                  <i class="fas fa-chevron-down absolute right-[12px] top-1/2 -translate-y-1/2 text-[12px] text-[#999] pointer-events-none"></i>
+                </div>
+              </div>
+              <div>
+                <label class="block text-[14px] text-[#333] mb-[6px]">device_id</label>
+                <input type="text" value="${AC.debugDeviceId}" placeholder="输入 device_id" class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none" data-debug-field="debugDeviceId">
+              </div>
+              <div>
+                <label class="block text-[14px] text-[#333] mb-[6px]">token</label>
+                <input type="text" value="${AC.debugToken}" placeholder="输入 token" class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none" data-debug-field="debugToken">
+              </div>
+              <a href="javascript:void(0)" class="inline-block text-[13px] text-[#1473e6] hover:underline">请联系小家 IoT 平台获取设备信息</a>
+            </div>
+          </div>
+          <div class="mb-[20px]">
+            <div class="text-[15px] font-medium text-[#333] mb-[12px]">高级参数</div>
+            <div class="border-t border-[#f0f0f0] pt-[12px] space-y-[14px]">
+              <div><label class="block text-[14px] text-[#333] mb-[6px]">SessionId</label><input type="text" value="ACbC7u75x7f-A4u3C5qll" readonly class="w-full h-[40px] px-[12px] bg-[#f5f5f5] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#999] outline-none cursor-not-allowed"></div>
+              <div><label class="block text-[14px] text-[#333] mb-[6px]"><span class="text-[#f5222d] mr-[2px]">*</span>应用ID</label><input type="text" value="11442" readonly class="w-full h-[40px] px-[12px] bg-[#f5f5f5] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#999] outline-none cursor-not-allowed"></div>
+              <div><label class="block text-[14px] text-[#333] mb-[6px]"><span class="text-[#f5222d] mr-[2px]">*</span>设备ID(同BotId)</label><input type="text" value="3b3fe8e35179476ba35cb8873262a0d7" readonly class="w-full h-[40px] px-[12px] bg-[#f5f5f5] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#999] outline-none cursor-not-allowed"></div>
+              <div><label class="block text-[14px] text-[#333] mb-[6px]"><span class="text-[#f5222d] mr-[2px]">*</span>企业ID</label><input type="text" value="100326" readonly class="w-full h-[40px] px-[12px] bg-[#f5f5f5] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#999] outline-none cursor-not-allowed"></div>
+            </div>
+          </div>
+          <div class="space-y-[14px]">
+            <div>
+              <label class="block text-[14px] text-[#333] mb-[6px]">位置</label>
+              <input type="text" value="${AC.debugLocation}" placeholder="请输入位置" class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none" data-debug-field="debugLocation">
+            </div>
+            <div>
+              <label class="block text-[14px] text-[#333] mb-[6px]">语言</label>
+              <div class="relative">
+                <select class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none appearance-none bg-white" data-debug-field="debugLanguage">
+                  <option value="中文" ${AC.debugLanguage==='中文'?'selected':''}>中文</option>
+                  <option value="English" ${AC.debugLanguage==='English'?'selected':''}>English</option>
+                </select>
+                <i class="fas fa-chevron-down absolute right-[12px] top-1/2 -translate-y-1/2 text-[12px] text-[#999] pointer-events-none"></i>
+              </div>
+            </div>
+          </div>
+        </div>`
+        : `
+        <div class="flex-1 flex flex-col items-center justify-center bg-[#fafafa]">
+          <i class="fas fa-robot text-[48px] text-[#d9d9d9] mb-[16px]"></i>
+          <div class="text-[14px] text-[#999]">和我对话试试吧</div>
+        </div>`}
+        <div class="p-[16px] border-t border-[#f0f0f0]">
+          <button class="w-full h-[40px] bg-[#1473e6] text-white text-[14px] rounded-[6px]">开始测试</button>
+        </div>
       </div>`;
     const content = `
       <div class="flex flex-col h-full">
@@ -1611,17 +1844,37 @@ function acSetScheduleBodyHtml(s){
     openDrawer(`
       <div class="flex flex-col h-full">
         <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
-          <div class="flex items-center text-[16px] font-medium"><span class="text-[#999]">指令库 /&nbsp;</span><input id="acset-title" class="font-medium border border-transparent hover:border-[#d9d9d9] focus:border-[#1473e6] rounded-[4px] px-[6px] py-[2px] outline-none" value="${s.name}"><span class="text-[#333]">&nbsp;指令集详情</span></div>
-          <div class="flex items-center gap-[12px]" data-set-topbtn></div>
+          <div class="flex items-center text-[16px] font-medium" id="acset-title-wrap">
+            <span id="acset-title-text" class="text-[#333]">${s.name}</span>
+            <input id="acset-title" class="hidden font-medium text-[#333] border border-[#1473e6] rounded-[4px] px-[6px] py-[2px] outline-none" value="${s.name}">
+            <i class="fas fa-pen text-[#86909c] text-[13px] ml-[6px] cursor-pointer hover:text-[#1473e6]" id="acset-title-edit"></i>
+          </div>
         </div>
-        <div class="flex gap-[20px] text-[13px] px-[24px] pt-[12px] border-b border-[#f0f0f0]" data-set-tabs>
-          <span class="pb-[8px] cursor-pointer" data-set-tab="list">指令列表</span>${((State.currentAppData||{}).iotPlatform==='集贤')?'':'<span class="pb-[8px] cursor-pointer" data-set-tab="schedule">定时指令</span><span class="pb-[8px] cursor-pointer" data-set-tab="batch">批量测试</span>'}
+        <div class="flex items-center justify-between px-[24px] pt-[12px] border-b border-[#f0f0f0]">
+          <div class="flex gap-[20px] text-[13px]" data-set-tabs>
+            <span class="pb-[8px] cursor-pointer" data-set-tab="list">指令列表</span>${((State.currentAppData||{}).iotPlatform==='集贤')?'':'<span class="pb-[8px] cursor-pointer" data-set-tab="schedule">定时指令</span><span class="pb-[8px] cursor-pointer" data-set-tab="batch">批量测试</span>'}
+          </div>
+          <div class="flex items-center pb-[6px]" data-set-topbtn></div>
         </div>
         <div class="flex-1 overflow-y-auto p-[24px]" data-set-body></div>
       </div>`, { widthClass:'w-3/4', onMount:(w)=>{
         const ti=w.querySelector('#acset-title');
-        if(ti){ const commit=()=>{ const nm=ti.value.trim(); if(nm && nm!==s.name){ s.name=nm; AC.promptDirty=true; renderApp(); } };
-          ti.addEventListener('blur',commit); ti.addEventListener('keydown',ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); ti.blur(); } }); }
+        const tiText=w.querySelector('#acset-title-text');
+        const tiEdit=w.querySelector('#acset-title-edit');
+        if(ti){
+          const commit=()=>{
+            const nm=ti.value.trim();
+            if(nm && nm!==s.name){ s.name=nm; AC.promptDirty=true; renderApp(); }
+            if(tiText){ tiText.textContent=s.name; tiText.classList.remove('hidden'); }
+            ti.classList.add('hidden');
+          };
+          ti.addEventListener('blur',commit);
+          ti.addEventListener('keydown',ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); ti.blur(); } });
+        }
+        if(tiEdit && ti) tiEdit.addEventListener('click',()=>{
+          if(tiText) tiText.classList.add('hidden');
+          ti.classList.remove('hidden'); ti.focus(); ti.select();
+        });
         // tab 切换：抽屉内局部刷新，不重建抽屉
         if((State.currentAppData||{}).iotPlatform==='集贤' && AC.acSetTab!=='list') AC.acSetTab='list';
         w.querySelectorAll('[data-set-tab]').forEach(b=>b.addEventListener('click',()=>{ AC.acSetTab=b.getAttribute('data-set-tab'); acSetRenderTab(w,s); }));
@@ -1635,8 +1888,8 @@ function acSetScheduleBodyHtml(s){
     if((State.currentAppData||{}).iotPlatform==='集贤' && tab!=='list') tab=AC.acSetTab='list';
     let body='', topBtn='';
     if(tab==='list'){ body=acSetListBodyHtml(s); topBtn=''; }
-    else if(tab==='schedule'){ body=acSetScheduleBodyHtml(s); topBtn=`<button class="h-[32px] px-[16px] bg-[#165DFF] text-white rounded-[6px] text-[13px]" data-set-save>保存并发布</button>`; }
-    else { body=acSetBatchBodyHtml(s); topBtn=`<button class="h-[32px] px-[16px] bg-[#165DFF] text-white rounded-[6px] text-[13px]" data-bt-add>新建测试任务</button>`; }
+    else if(tab==='schedule'){ body=acSetScheduleBodyHtml(s); topBtn=`<button class="h-[34px] px-[18px] bg-[#165DFF] text-white rounded-[6px] text-[14px] font-medium hover:bg-[#1266d1]" data-set-save>保存并发布</button>`; }
+    else { body=acSetBatchBodyHtml(s); topBtn=`<button class="h-[34px] px-[18px] bg-[#165DFF] text-white rounded-[6px] text-[14px] font-medium hover:bg-[#1266d1]" data-bt-add><i class="fas fa-plus mr-[6px]"></i>新建测试任务</button>`; }
     // tab 高亮
     w.querySelectorAll('[data-set-tab]').forEach(sp=>{ const on=sp.getAttribute('data-set-tab')===tab;
       sp.classList.toggle('border-b-2',on); sp.classList.toggle('border-[#1473e6]',on); sp.classList.toggle('text-[#1473e6]',on); sp.classList.toggle('text-[#666]',!on); });
@@ -1968,8 +2221,9 @@ function acSetScheduleBodyHtml(s){
     openModal(html, { onMount:(w)=>{ w.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>w.remove())); } });
   }
 
-  // 添加工具抽屉（工具执行层）
-  function acToolDrawer(){
+  // [已移除] 添加工具抽屉：改为执行层「添加工具」下拉框（见 step() 的 toolBar）
+  function acToolDrawer_removed(){
+    return;
     const ta = document.querySelector('[data-ac-tool-target]');
     let insertPos = ta ? (ta.selectionStart!=null ? ta.selectionStart : ta.value.length) : 0;
     const tools = AC.tools || [];
@@ -1977,20 +2231,23 @@ function acSetScheduleBodyHtml(s){
     const listHtml = tools.map((tl,i)=>`
       <div class="px-[16px] py-[12px] text-[14px] cursor-pointer border-l-[3px] ${i===0?'text-[#165DFF] bg-[#f4f8ff] border-[#165DFF]':'text-[#333] border-transparent hover:bg-[#fafafa]'}" data-tool-item="${i}">${tl.name}</div>`).join('');
     const detail = (tl)=>{
-      const params = tl.params.map(p=>`
-        <div class="flex items-baseline mb-[6px]">
-          <code class="px-[6px] py-[2px] bg-[#f5f5f5] rounded-[4px] text-[13px] text-[#333]">${p.k}</code>
-          <span class="text-[13px] text-[#999] ml-[10px]">: ${p.t}</span>
-        </div>`).join('');
+      const params = tl.params.map(p=>{
+        const req = p.t==='必传';
+        return `
+        <div class="relative inline-flex flex-col px-[10px] py-[8px] mr-[10px] mb-[10px] bg-[#f5f5f5] rounded-[6px] align-top">
+          ${req?`<span class="absolute top-[4px] right-[6px] text-[#f5222d] text-[13px] leading-none">*</span>`:''}
+          <code class="text-[13px] text-[#333] pr-[10px]">${p.k}</code>
+        </div>`;
+      }).join('');
       return `
         <div class="flex items-center justify-between mb-[24px]">
           <h3 class="text-[18px] font-medium text-[#333]">${tl.name}</h3>
           <button class="h-[34px] px-[20px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-tool-confirm>添加</button>
         </div>
         <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[6px]">描述</div><div class="text-[14px] text-[#333]">${tl.desc}</div></div>
-        <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[8px]">入参</div>${params}</div>
+        <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[8px]">入参</div><div class="flex flex-wrap">${params}</div></div>
         <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[8px]">返回</div><code class="inline-block px-[10px] py-[6px] bg-[#f5f5f5] rounded-[6px] text-[13px] text-[#333]">${tl.ret}</code></div>
-        <div><div class="text-[13px] text-[#999] mb-[8px]">变量</div><code class="inline-block px-[10px] py-[6px] bg-[#f5f5f5] rounded-[6px] text-[13px] text-[#333]">{{tool.${tl.name}}}</code></div>`;
+        ${tl.hasRuntimeConfig?`<div><div class="flex items-center justify-between mb-[4px]"><div class="text-[13px] text-[#333]">运行时配置</div><span class="text-[#1473e6] text-[13px] cursor-pointer shrink-0" data-ac-devstate-edit><i class="fas fa-cog mr-[4px]"></i>解析并配置翻译</span></div><div class="text-[12px] text-[#999] mb-[8px]">工具执行时的额外配置，如状态码转译模版、字段映射等</div><textarea class="w-full h-[140px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6] font-mono" placeholder="请输入运行时配置" data-tool-runtime="${tl.name}"></textarea></div>`:''}`;
     };
     const html = `
       <div class="h-full flex flex-col">
@@ -2017,6 +2274,7 @@ function acSetScheduleBodyHtml(s){
         detailBox.innerHTML = detail(tools[cur]);
       });
       detailBox.addEventListener('click',(e)=>{
+        if(e.target.closest('[data-ac-devstate-edit]')){ acDeviceStateModal(); return; }
         if(!e.target.closest('[data-tool-confirm]')) return;
         const token = '{{tool.'+tools[cur].name+'}}';
         if(ta){
@@ -2028,6 +2286,57 @@ function acSetScheduleBodyHtml(s){
         }
         showToast('已添加 '+tools[cur].name);
         w.remove();
+      });
+    } });
+  }
+
+  // 工具列表：仅浏览查看系统工具（不含插入变量功能）
+  function acToolListDrawer(){
+    const tools = AC.tools || [];
+    if(!tools.length){ showToast('暂无可用系统工具'); return; }
+    const listHtml = tools.map((tl,i)=>`
+      <div class="px-[16px] py-[12px] text-[14px] cursor-pointer border-l-[3px] ${i===0?'text-[#165DFF] bg-[#f4f8ff] border-[#165DFF]':'text-[#333] border-transparent hover:bg-[#fafafa]'}" data-tool-item="${i}">${tl.name}</div>`).join('');
+    const detail = (tl)=>{
+      const params = tl.params.map(p=>{
+        const req = p.t==='必传';
+        return `<div class="relative inline-flex flex-col px-[10px] py-[8px] mr-[10px] mb-[10px] bg-[#f5f5f5] rounded-[6px] align-top">
+          ${req?`<span class="absolute top-[4px] right-[6px] text-[#f5222d] text-[13px] leading-none">*</span>`:''}
+          <code class="text-[13px] text-[#333] pr-[10px]">${p.k}</code>
+        </div>`;
+      }).join('');
+      return `
+        <div class="mb-[24px]"><h3 class="text-[18px] font-medium text-[#333]">${tl.name}</h3></div>
+        <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[6px]">描述</div><div class="text-[14px] text-[#333]">${tl.desc}</div></div>
+        <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[8px]">入参</div><div class="flex flex-wrap">${params}</div></div>
+        <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[8px]">返回</div><code class="inline-block px-[10px] py-[6px] bg-[#f5f5f5] rounded-[6px] text-[13px] text-[#333]">${tl.ret}</code></div>
+        ${tl.hasRuntimeConfig?`<div><div class="flex items-center justify-between mb-[4px]"><div class="text-[13px] text-[#333]">运行时配置</div><span class="text-[#1473e6] text-[13px] cursor-pointer shrink-0" data-ac-devstate-edit><i class="fas fa-cog mr-[4px]"></i>解析并配置翻译</span></div><div class="text-[12px] text-[#999] mb-[8px]">工具执行时的额外配置，如状态码转译模版、字段映射等</div><textarea class="w-full h-[140px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6] font-mono" placeholder="请输入运行时配置" data-tool-runtime="${tl.name}"></textarea></div>`:''}`;
+    };
+    const html = `
+      <div class="h-full flex flex-col">
+        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
+          <h3 class="text-[16px] font-medium text-[#333]">工具列表</h3>
+          <i class="fas fa-times text-[#999] cursor-pointer" data-close></i>
+        </div>
+        <div class="px-[24px] pt-[12px] text-[12px] text-[#999]">以下为可用系统工具。如需将工具变量插入提示词，请在「工具执行」层展开后点击「添加工具」。</div>
+        <div class="flex-1 flex overflow-hidden">
+          <div class="w-[200px] border-r border-[#f0f0f0] overflow-y-auto py-[8px]" data-tool-list>${listHtml}</div>
+          <div class="flex-1 overflow-y-auto px-[24px] py-[20px]" data-tool-detail>${detail(tools[0])}</div>
+        </div>
+      </div>`;
+    openDrawer(html, { widthClass:'w-[760px]', onMount:(w)=>{
+      let cur = 0;
+      const detailBox = w.querySelector('[data-tool-detail]');
+      w.querySelector('[data-tool-list]').addEventListener('click',(e)=>{
+        const it = e.target.closest('[data-tool-item]');
+        if(!it) return;
+        cur = parseInt(it.getAttribute('data-tool-item'));
+        w.querySelectorAll('[data-tool-item]').forEach((n,i)=>{
+          n.className = 'px-[16px] py-[12px] text-[14px] cursor-pointer border-l-[3px] '+(i===cur?'text-[#165DFF] bg-[#f4f8ff] border-[#165DFF]':'text-[#333] border-transparent hover:bg-[#fafafa]');
+        });
+        detailBox.innerHTML = detail(tools[cur]);
+      });
+      detailBox.addEventListener('click',(e)=>{
+        if(e.target.closest('[data-ac-devstate-edit]')){ acDeviceStateModal(); }
       });
     } });
   }
@@ -2053,6 +2362,8 @@ function acSetScheduleBodyHtml(s){
       // 智能体
       const agent = t.closest('[data-ac-agent]');
       if(agent){ acSwitchAgent(agent.getAttribute('data-ac-agent')); renderApp(); return; }
+      const gotoDef = t.closest('[data-ac-goto-default]');
+      if(gotoDef){ acSwitchAgent(gotoDef.getAttribute('data-ac-goto-default')); renderApp(); return; }
       if(t.closest('[data-ac-agent-create]')){
         if(AC.agents.length>=10){ showToast('智能体数量已达上限'); return; }
         acSnapshotAgent(AC.activeAgentId);
@@ -2106,10 +2417,39 @@ function acSetScheduleBodyHtml(s){
       if(t.closest('[data-ac-filler-add]')){ if(AC.fillerSentences.length>=5){ showToast('最多5条垫句'); return; } AC.fillerSentences.push(''); renderApp(); return; }
       const fdel = t.closest('[data-ac-filler-del]');
       if(fdel){ const i=parseInt(fdel.getAttribute('data-ac-filler-del')); if(AC.fillerSentences.length<=1){ showToast('至少保留1条'); return; } AC.fillerSentences.splice(i,1); renderApp(); return; }
-      // 添加工具
-      if(t.closest('[data-ac-tool-add]')){ e.stopPropagation(); acToolDrawer(); return; }
-      // 设备上行状态：解析并配置翻译（需在 data-ac-step 之前判断，避免误触展开）
-      if(t.closest('[data-ac-devstate-edit]')){ acDeviceStateModal(); return; }
+      // 添加工具：下拉框
+      if(t.closest('[data-ac-tool-add]')){
+        e.stopPropagation();
+        // 打开前记录当前提示词光标位置（无停留处则记为最上方 0）
+        const ta0 = document.querySelector('[data-ac-tool-target]');
+        AC.toolInsertPos = (ta0 && ta0.selectionStart!=null) ? ta0.selectionStart : 0;
+        AC.toolDropdownOpen = !AC.toolDropdownOpen;
+        renderApp();
+        return;
+      }
+      if(t.closest('[data-ac-tool-mask]')){ AC.toolDropdownOpen=false; renderApp(); return; }
+      const toolPick = t.closest('[data-ac-tool-pick]');
+      if(toolPick){
+        const name = toolPick.getAttribute('data-ac-tool-pick');
+        const token = '{{tool.'+name+'}}';
+        const ta = document.querySelector('[data-ac-tool-target]');
+        if(ta){
+          const pos = (AC.toolInsertPos!=null) ? Math.min(AC.toolInsertPos, ta.value.length) : 0;
+          const v = ta.value;
+          ta.value = v.slice(0,pos) + token + v.slice(pos);
+          const next = pos + token.length;
+          ta.focus();
+          try{ ta.setSelectionRange(next,next); }catch(err){}
+        }
+        // 直接操作 DOM 关闭下拉，避免 renderApp 重建 textarea 丢失已插入内容
+        AC.toolDropdownOpen = false;
+        const mask = document.querySelector('[data-ac-tool-mask]'); if(mask) mask.remove();
+        const panel = toolPick.closest('div.absolute'); if(panel) panel.remove();
+        showToast('已添加 '+name);
+        return;
+      }
+      // 工具列表：外层浏览查看
+      if(t.closest('[data-ac-tool-list]')){ e.stopPropagation(); acToolListDrawer(); return; }
       // 三步流程展开
       const step = t.closest('[data-ac-step]');
       if(step){ const k=step.getAttribute('data-ac-step'); AC.expandedSteps[k]=!AC.expandedSteps[k]; renderApp(); return; }
@@ -2122,10 +2462,33 @@ function acSetScheduleBodyHtml(s){
       if(t.closest('[data-ac-prompt-update]')){ AC.promptDirty=false; showToast('提示词已更新'); renderApp(); return; }
       // 编写教程
       if(t.closest('[data-ac-tutorial]')){ acTutorialModal(); return; }
-      // 指令区
+      // 指令区：添加指令下拉框
       if(t.closest('[data-ac-cmd-add]')){
-       const nm=prompt('请输入指令名称','');
-        if(nm && nm.trim()){ AC.commands.push({ id:'cmd-'+Date.now(), name:nm.trim(), type:'自定义' }); renderApp(); }
+        AC.cmdDropdownOpen=!AC.cmdDropdownOpen;
+        renderApp();
+        return;
+      }
+      const cmdGrp=t.closest('[data-ac-cmd-group]');
+      if(cmdGrp){
+        if(!AC.cmdDropdownExpanded) AC.cmdDropdownExpanded={ sys:true, mine:true };
+        const gid=cmdGrp.getAttribute('data-ac-cmd-group');
+        AC.cmdDropdownExpanded[gid]=!AC.cmdDropdownExpanded[gid];
+        renderApp();
+        return;
+      }
+      const cmdPick=t.closest('[data-ac-cmd-pick]');
+      if(cmdPick){
+        const name=cmdPick.getAttribute('data-ac-cmd-pick');
+        const type=cmdPick.getAttribute('data-ac-cmd-type')||'自定义';
+        AC.commands.push({ id:'cmd-'+Date.now(), name, type });
+        showToast('已添加指令：'+name);
+        renderApp();
+        return;
+      }
+      // 点击下拉框外部关闭（点在下拉框内部不关闭）
+      if(AC.cmdDropdownOpen && !t.closest('[data-ac-cmd-dropdown]')){
+        AC.cmdDropdownOpen=false;
+        renderApp();
         return;
       }
       const cmdDel=t.closest('[data-ac-cmd-del]');
@@ -2137,11 +2500,20 @@ function acSetScheduleBodyHtml(s){
       // 交互策略编辑
       const stratEdit = t.closest('[data-ac-strat-edit]');
       if(stratEdit){ acStratDrawer(stratEdit.getAttribute('data-ac-strat-edit')); return; }
+      // 调试窗：收起/展开
+      if(t.closest('[data-debug-toggle]')){ AC.debugCollapsed=!AC.debugCollapsed; renderApp(); return; }
+      // 调试窗：设置面板开关（齿轮）
+      if(t.closest('[data-debug-settings]')){ AC.debugSettingsOpen=!AC.debugSettingsOpen; renderApp(); return; }
     };
     // 垫句输入同步（oninput 委托，避免监听器累积）
     app.oninput = function(e){
       const inp = e.target.closest('[data-ac-filler-idx]');
       if(inp){ const i=parseInt(inp.getAttribute('data-ac-filler-idx')); AC.fillerSentences[i]=inp.value; }
+    };
+    // 调试窗字段同步（onchange 委托，select 与文本输入用 change 避免重渲染丢焦点）
+    app.onchange = function(e){
+      const fld = e.target.closest('[data-debug-field]');
+      if(fld){ const k=fld.getAttribute('data-debug-field'); AC[k]=fld.value; }
     };
   };
   </script>
