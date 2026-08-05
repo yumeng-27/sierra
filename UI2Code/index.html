@@ -996,14 +996,13 @@ const wrap = openModal(html);
     skillDropdownOpen: false,
     toolDropdownOpen: false,
     toolInsertPos: null,
-    toolPanelTab: 'list',    // 工具面板当前 tab：'list'=工具列表 / 'used'=已添加工具
-    usedTools: [],           // 本次提示词已引用的工具名（去重）
-    toolRuntimeConfig: {},   // 后处理配置：{ [toolName]: 配置文本 }
-    deviceStateDraft: {},    // 设备状态翻译配置草稿：{ [toolName]: { deviceId, token, json, rows } }，点过「获取上行状态」后保留
+    usedTools: [],           // 已添加工具行：[{ id, name(自定义,必填), desc(自定义,可空), tool(底层工具名) }]
+    toolRuntimeConfig: {},   // 后处理配置：{ [行id]: 配置文本 }
+    deviceStateDraft: {},    // 设备状态翻译配置草稿：{ [行id]: { deviceId, token, json, rows } }，点过「获取上行状态」后保留
     promptDirty: false,
     commands: [{ id:'cmd-1', name:'制氧机-案例', type:'自定义' }],
     tools: [
-      { name:'iot_get_device_shadow', desc:'IoT工具：获取设备影子状态<br><br>Args:<br>&nbsp;&nbsp;request_id: 请求ID（必传）<br>&nbsp;&nbsp;vendor_id: 厂商ID（必传）<br>&nbsp;&nbsp;bot_id: 机器人ID（必传）<br>&nbsp;&nbsp;did: 设备ID（必传）<br>&nbsp;&nbsp;device_token: 设备令牌（必传）<br>&nbsp;&nbsp;use_mock: 是否使用模拟实现（选填）<br><br>Returns:<br>&nbsp;&nbsp;设备影子状态', params:[{k:'request_id',t:'必传'},{k:'vendor_id',t:'必传'},{k:'bot_id',t:'必传'},{k:'pin',t:'-'},{k:'home_id',t:'-'},{k:'did',t:'必传'},{k:'device_token',t:'必传'},{k:'use_mock',t:'选填'}], ret:'typing.dict[str,typing.Any]', hasRuntimeConfig:true },
+      { name:'iot_get_device_shadow', desc:'IoT工具：获取设备影子状态', params:[{k:'request_id',t:'必传'},{k:'vendor_id',t:'必传'},{k:'bot_id',t:'必传'},{k:'pin',t:'-'},{k:'home_id',t:'-'},{k:'did',t:'必传'},{k:'device_token',t:'必传'},{k:'use_mock',t:'选填'}], ret:'typing.dict[str,typing.Any]', hasRuntimeConfig:true },
       { name:'range_check', desc:'数值/枚举范围与条件取值校验', params:[{k:'value',t:'number|string'},{k:'range',t:'object'}], ret:'{ ok:boolean, fixed?:值 }' },
       { name:'cron_parse', desc:'自然语言时间解析为 cron 表达式', params:[{k:'text',t:'string'}], ret:'{ cron:string, next?:string }' },
       { name:'device_capability_query', desc:'查询设备能力清单与取值范围', params:[{k:'deviceId',t:'string'}], ret:'{ caps:object[] }' },
@@ -1327,9 +1326,7 @@ const wrap = openModal(html);
     const step = (key,title,desc)=>{
       let inner = '';
       const isTool = key==='tool';
-      const toolBar = isTool ? `<div class="flex items-center justify-end mb-[8px] relative">
-            <span class="text-[#1473e6] text-[13px] cursor-pointer" data-ac-tool-panel><i class="fas fa-wrench mr-[4px]"></i>工具</span>
-          </div>`:'';
+      const toolBar = '';
       if(AC.expandedSteps[key]){
         if(isAuto && !hasSet){
           // 根据指令集生成但无指令集：不可编辑 + 框内灰色提示
@@ -1392,6 +1389,7 @@ const wrap = openModal(html);
             ${switchHtml('ac-planner', AC.isTaskPlannerEnabled)}
           </div>
           <div class="flex items-center">
+            <span class="text-[#1473e6] text-[13px] cursor-pointer mr-[16px]" data-ac-tool-panel>工具配置</span>
             <span class="text-[#1473e6] text-[13px] cursor-pointer" data-ac-tutorial><i class="fas fa-book mr-[4px]"></i>编写教程</span>
           </div>
         </div>
@@ -1425,8 +1423,10 @@ const wrap = openModal(html);
   }
 
   /* ---------- 设备上行状态：解析 JSON + 配置翻译表格 弹窗 ---------- */
-  function acDeviceStateModal(toolName){
-    // toolName：来自工具面板「后处理」入口，用于标识当前配置归属的工具（按工具名共享一份配置）
+  function acDeviceStateModal(rowId, onDone, dispNameArg){
+    // rowId：当前配置归属的工具行 id（草稿态，每行一份独立配置）；onDone(out) 生成后的写回回调；dispNameArg 标题展示名
+    const _row = (AC.usedTools||[]).find(r=>r && r.id===rowId) || null;
+    const dispName = dispNameArg || (_row ? ((_row.name||_row.tool)||'') : '');
     // 预置演示回填（实际由运营配置），key 支持嵌套点路径
     const preset = {
       'data.bedsteadStatus':{ name:'预设模式', type:'enum', map:{'1':'坐姿','2':'平躺模式','3':'零重力'} },
@@ -1451,7 +1451,7 @@ const wrap = openModal(html);
       timestamp:1785334704485
     }, null, 2);
     // 草稿：点过一次「获取上行状态」后，deviceId/token/json/表格配置按工具名持久化，重开时回填
-    const draftKey = toolName || '__default__';
+    const draftKey = rowId || '__default__';
     if(!AC.deviceStateDraft) AC.deviceStateDraft = {};
     const draft = AC.deviceStateDraft[draftKey] || null;
     let rows = (draft && Array.isArray(draft.rows)) ? draft.rows.map(r=>({...r, map:{...(r.map||{})}})) : [];
@@ -1462,7 +1462,7 @@ const wrap = openModal(html);
       <div class="w-[880px] max-h-[86vh] bg-white rounded-[8px] shadow-xl flex flex-col overflow-hidden">
         <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
           <div>
-            <h3 class="text-[16px] font-medium text-[#333]">设备状态翻译配置${toolName?` · ${toolName}`:''}</h3>
+            <h3 class="text-[16px] font-medium text-[#333]">设备状态翻译配置${dispName?` · ${dispName}`:''}</h3>
           </div>
           <i class="fas fa-times text-[#999] cursor-pointer hover:text-[#333]" data-ds-close></i>
         </div>
@@ -1669,14 +1669,8 @@ const wrap = openModal(html);
         });
         // 生成运行时配置 JSON（postHandler=templateRender）
         const out = JSON.stringify({ postHandler:'templateRender', templateRender:{ mappings, template } }, null, 2);
-        // 写回到当前打开抽屉的「运行时配置」编辑框，并持久化到 AC.toolRuntimeConfig
-        const boxes = document.querySelectorAll('[data-tool-runtime]');
-        const box = boxes[boxes.length-1];
-        if(box){
-          box.value = out;
-          if(!AC.toolRuntimeConfig) AC.toolRuntimeConfig={};
-          AC.toolRuntimeConfig[box.getAttribute('data-tool-runtime')] = out;
-        }
+        // 通过回调写回到调用方（工具面板草稿）
+        if(typeof onDone === 'function') onDone(out);
         wrap.remove();
       }
     });
@@ -2366,160 +2360,202 @@ function acSetScheduleBodyHtml(s){
     openModal(html, { onMount:(w)=>{ w.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>w.remove())); } });
   }
 
-  // 同步已添加工具：合并手动 usedTools 与提示词正则扫描结果，仅保留 AC.tools 中存在的
-function acSyncUsedTools(){
-    const ta = document.querySelector('textarea[data-ac-tool-target]');
-    const scanned = [];
-    if(ta){
-      // 扫描提示词中以 '工具名' 形式出现的已用工具（按 AC.tools 精确匹配，避免误伤普通字符串）
-      (AC.tools||[]).forEach(t=>{
-        const re = new RegExp("'" + t.name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + "'");
-        if(re.test(ta.value)) scanned.push(t.name);
-      });
-    }
-    const merged = Array.from(new Set([...(AC.usedTools||[]), ...scanned]));
-    const valid = merged.filter(n => (AC.tools||[]).some(t => t.name === n));
-    AC.usedTools = valid;
-    return valid;
+  // 生成唯一行 id
+  function acGenToolId(){ return 'ut-' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+  // 移除工具行：从 usedTools 剔除并删除其运行时配置（不改动提示词，工具与提示词不联动）
+  function acRemoveToolRow(id){
+    AC.usedTools = (AC.usedTools||[]).filter(r => r.id !== id);
+    if(AC.toolRuntimeConfig) delete AC.toolRuntimeConfig[id];
   }
-  // 在光标处插入工具引用（格式：'工具名'），并登记到 usedTools
-  function acInsertToolToken(name){
-    const ta = document.querySelector('textarea[data-ac-tool-target]');
-    if(!ta){ showToast('请先展开「工具执行」提示词'); return false; }
-    const token = `'${name}'`;
-    const pos = (typeof AC.toolInsertPos === 'number') ? AC.toolInsertPos : ta.value.length;
-    ta.value = ta.value.slice(0, pos) + token + ta.value.slice(pos);
-    AC.toolInsertPos = pos + token.length;
-    if(!(AC.usedTools||[]).includes(name)) AC.usedTools = [...(AC.usedTools||[]), name];
-    ta.dispatchEvent(new Event('input', { bubbles:true }));
-    return true;
-  }
-  // 从提示词移除工具引用，并从 usedTools 剔除
-  function acRemoveToolToken(name){
-    const ta = document.querySelector('textarea[data-ac-tool-target]');
-    if(ta){
-      const re = new RegExp("'" + name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + "'",'g');
-      ta.value = ta.value.replace(re, '');
-      ta.dispatchEvent(new Event('input', { bubbles:true }));
-    }
-    AC.usedTools = (AC.usedTools||[]).filter(n => n !== name);
-    if(AC.toolRuntimeConfig) delete AC.toolRuntimeConfig[name];
-  }
-  // 工具面板：tab 切换「工具列表」与「已添加工具」，均为左列表右详情
+  // 工具面板：左列表右表单；新建/编辑为「草稿态」——未点「确定」不写入 usedTools，切走即丢弃
   function acToolPanelDrawer(){
     const tools = AC.tools || [];
     if(!tools.length){ showToast('暂无可用系统工具'); return; }
-    acSyncUsedTools();
-    if(AC.toolPanelTab!=='used' && AC.toolPanelTab!=='list') AC.toolPanelTab='list';
+    if(!Array.isArray(AC.usedTools)) AC.usedTools = [];
     const esc = v => String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    // 左侧列表项渲染（tab=list 显示全部工具；tab=used 显示已添加工具）
-    const listItem = (name, idx, active)=>`
-      <div class="px-[16px] py-[12px] text-[14px] cursor-pointer border-l-[3px] ${active?'text-[#165DFF] bg-[#f4f8ff] border-[#165DFF]':'text-[#333] border-transparent hover:bg-[#fafafa]'}" data-tool-item="${idx}">${name}${(AC.usedTools||[]).includes(name)?'<i class="fas fa-check text-[#165DFF] text-[12px] ml-[6px]"></i>':''}</div>`;
-    const renderListHtml = ()=>{
-      const arr = AC.toolPanelTab==='used' ? (AC.usedTools||[]) : tools.map(t=>t.name);
-      if(!arr.length) return `<div class="px-[16px] py-[20px] text-[13px] text-[#999]">暂无已添加工具，请到「工具列表」中插入。</div>`;
-      return arr.map((name,i)=>listItem(name,i,i===0)).join('');
-    };
-    // 右侧详情：工具列表 tab 含「插入提示词」按钮；已添加工具 tab 不含插入/移除，仅名称+描述+后处理
-    const detail = (tl, showInsert)=>{
-      if(!tl) return `<div class="text-[13px] text-[#999]">请选择左侧工具</div>`;
-      const hasRt = !!tl.hasRuntimeConfig;
-      // 已添加工具 tab：展示「运行时配置」块——含解析入口 + 配置文本框（生成翻译写入此处）
-      const rtCfg = ((AC.toolRuntimeConfig||{})[tl.name]) || '';
-      const rtBlock = (AC.toolPanelTab==='used' && hasRt) ? `
-        <div class="mb-[8px]"><div class="flex items-center justify-between mb-[6px]"><div class="text-[13px] text-[#333]">运行时配置</div>
-          <span class="text-[#1473e6] text-[13px] cursor-pointer shrink-0" data-panel-config="${tl.name}"><i class="fas fa-cog mr-[4px]"></i>解析并配置翻译</span></div>
-          <div class="text-[12px] text-[#999] mb-[8px]">工具执行后的额外配置，如状态码转译模版、字段映射等。</div>
-          <textarea class="w-full h-[220px] p-[10px] border border-[#e5e6eb] rounded-[6px] text-[12px] font-mono leading-[1.6] bg-[#f7f8fa] text-[#4e5969]" placeholder="点击「解析并配置翻译」生成运行时配置，或手动编写 JSON" data-tool-runtime="${tl.name}">${esc(rtCfg)}</textarea>
-        </div>` : '';
-      // 工具列表 tab：参数块（字段名 + 类型/约束）
-      const params = tl.params || [];
-      const paramsBlock = `<div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[8px]">参数</div>${
-        params.length ? `<div class="border border-[#f0f0f0] rounded-[6px] overflow-hidden">${
-          params.map(p=>`<div class="flex items-center justify-between px-[12px] py-[8px] border-b border-[#f5f5f5] last:border-b-0"><code class="text-[13px] text-[#333] font-mono">${esc(p.k)}</code><span class="text-[12px] text-[#86909c]">${esc(p.t)}</span></div>`).join('')
-        }</div>` : `<div class="text-[13px] text-[#999]">无</div>`
-      }</div>`;
-      const retBlock = `<div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[8px]">返回</div><code class="inline-block px-[10px] py-[6px] bg-[#f5f5f5] rounded-[6px] text-[13px] text-[#333]">${tl.ret}</code></div>`;
+    const findTool = n => tools.find(t=>t.name===n);
+    // 左侧列表项：工具名 + 底层工具描述 两行展示（hover 显示删除）
+    const listItem = (row, active)=>{
+      const bt = findTool(row.tool);
+      const title = (row.name||'').trim() || (bt ? bt.name : '') || '未命名工具';
+      const sub = (row.desc||'').trim() || (bt ? bt.desc : '');
       return `
-        <div class="mb-[24px] flex items-center justify-between"><h3 class="text-[18px] font-medium text-[#333]">${tl.name}</h3>
-          ${showInsert?`<button class="px-[14px] py-[6px] bg-[#165DFF] text-white text-[13px] rounded-[6px]" data-tool-confirm="${tl.name}"><i class="fas fa-plus mr-[4px]"></i>插入提示词</button>`:''}
+      <div class="group px-[16px] py-[12px] cursor-pointer border-l-[3px] ${active?'bg-[#f4f8ff] border-[#165DFF]':'border-transparent hover:bg-[#fafafa]'}" data-tool-item="${row.id}">
+        <div class="flex items-center justify-between">
+          <span class="truncate text-[14px] ${active?'text-[#165DFF]':'text-[#333]'}">${esc(title)}</span>
+          <i class="fas fa-trash-alt text-[#c9cdd4] hover:text-[#f53f3f] text-[12px] ml-[8px] opacity-0 group-hover:opacity-100 shrink-0" data-tool-remove="${row.id}"></i>
         </div>
-        <div class="mb-[20px]"><div class="text-[13px] text-[#999] mb-[6px]">描述</div><div class="text-[14px] text-[#333]">${tl.desc}</div></div>
-        ${(AC.toolPanelTab==='used') ? rtBlock : `${paramsBlock}${retBlock}`}`;
+        ${sub?`<div class="text-[12px] text-[#999] mt-[2px] truncate">${esc(sub)}</div>`:''}
+      </div>`;
     };
-    const curTool = ()=>{
-      const arr = AC.toolPanelTab==='used' ? (AC.usedTools||[]) : tools.map(t=>t.name);
-      const name = arr[0];
-      return tools.find(t=>t.name===name);
+    const renderListHtml = (activeId)=>{
+      const arr = AC.usedTools||[];
+      if(!arr.length) return '';
+      return arr.map(r=>listItem(r, r.id===activeId)).join('');
     };
-    const tab = (key,label)=>{
-      const active = AC.toolPanelTab===key;
-      return `<div class="px-[4px] pb-[10px] mr-[24px] text-[14px] cursor-pointer border-b-[2px] ${active?'text-[#165DFF] font-medium border-[#165DFF]':'text-[#666] border-transparent'}" data-panel-tab="${key}">${label}</div>`;
+    // 「选择工具」下拉：自定义面板，每项 工具名 + 默认描述 两行
+    const selectOptions = (sel)=> tools.map(t=>`
+      <div class="px-[12px] py-[8px] cursor-pointer hover:bg-[#f4f8ff] ${t.name===sel?'bg-[#f4f8ff]':''}" data-tool-opt="${esc(t.name)}">
+        <div class="text-[14px] text-[#333]">${esc(t.name)}</div>
+        <div class="text-[12px] text-[#999] mt-[2px] truncate">${esc(t.desc||'')}</div>
+      </div>`).join('');
+    // 右侧详情：表单（名称必填 / 描述可空 / 选择工具下拉 / 运行时配置 / 确定+取消）；draft 为草稿对象
+    const detail = (draft)=>{
+      if(!draft) return `<div class="text-[13px] text-[#999]">${(AC.usedTools||[]).length?'请选择左侧工具，或点击右上角「添加工具」。':'暂无工具，点击右上角「添加工具」开始配置。'}</div>`;
+      const rtCfg = draft.runtime || '';
+      const selText = draft.tool ? esc(draft.tool) : '<span class="text-[#999]">请选择工具</span>';
+      const errName = draft.errName ? `<div class="text-[12px] text-[#f53f3f] mt-[4px]">请输入工具名称</div>` : '';
+      const errTool = draft.errTool ? `<div class="text-[12px] text-[#f53f3f] mt-[4px]">请选择工具</div>` : '';
+      // 运行时配置区：始终展示（未选工具也可编辑）
+      const rtBlock = `
+        <div class="mb-[8px]"><div class="flex items-center justify-between mb-[6px]"><div class="text-[13px] text-[#333]">运行时配置</div>
+          <span class="text-[#1473e6] text-[13px] cursor-pointer shrink-0" data-panel-config><i class="fas fa-cog mr-[4px]"></i>解析并配置翻译</span></div>
+          <div class="text-[12px] text-[#999] mb-[8px]">工具执行后的额外配置，如状态码转译模版、字段映射等。</div>
+          <textarea class="w-full h-[180px] p-[10px] border border-[#e5e6eb] rounded-[6px] text-[12px] font-mono leading-[1.6] bg-[#f7f8fa] text-[#4e5969]" placeholder="点击「解析并配置翻译」生成运行时配置，或手动编写 JSON" data-tool-runtime>${esc(rtCfg)}</textarea>
+        </div>`;
+      return `
+        <div class="flex-1 overflow-y-auto pr-[2px]">
+          <div class="mb-[20px]"><div class="text-[13px] text-[#333] mb-[6px]">名称 <span class="text-[#f53f3f]">*</span></div>
+            <input class="w-full h-[38px] px-[12px] border ${draft.errName?'border-[#f53f3f]':'border-[#e5e6eb]'} rounded-[6px] text-[14px]" placeholder="输入工具名称" value="${esc(draft.name||'')}" data-tool-name>${errName}</div>
+          <div class="mb-[20px]"><div class="text-[13px] text-[#333] mb-[6px]">描述</div>
+            <textarea class="w-full h-[80px] px-[12px] py-[10px] border border-[#e5e6eb] rounded-[6px] text-[14px] leading-[1.6]" placeholder="输入工具描述（留空将使用默认描述）" data-tool-desc>${esc(draft.desc||'')}</textarea></div>
+          <div class="mb-[20px]"><div class="text-[13px] text-[#333] mb-[6px]">选择工具 <span class="text-[#f53f3f]">*</span></div>
+            <div class="relative" data-tool-select-wrap>
+              <div class="w-full h-[38px] px-[12px] border ${draft.errTool?'border-[#f53f3f]':'border-[#e5e6eb]'} rounded-[6px] text-[14px] bg-white flex items-center justify-between cursor-pointer" data-tool-select-btn>
+                <span class="truncate">${selText}</span><i class="fas fa-chevron-down text-[#999] text-[12px] ml-[8px]"></i></div>
+              <div class="hidden absolute left-0 right-0 top-[42px] z-[20] max-h-[240px] overflow-y-auto bg-white border border-[#e5e6eb] rounded-[6px] shadow-lg" data-tool-select-list>${selectOptions(draft.tool)}</div>
+            </div>
+            ${errTool}
+            <div class="text-[12px] text-[#999] mt-[6px]">从当前 iot 平台可用工具中选择要使用的工具。</div></div>
+          ${rtBlock}
+        </div>
+        <div class="pt-[14px] mt-[4px] border-t border-[#f0f0f0] flex justify-end shrink-0">
+          <button class="h-[36px] px-[24px] border border-[#d9d9d9] rounded-[6px] text-[14px] text-[#333] mr-[12px] hover:bg-[#f5f5f5]" data-tool-cancel>取消</button>
+          <button class="h-[36px] px-[24px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-tool-confirm>确定</button>
+        </div>`;
     };
     const html = `
       <div class="h-full flex flex-col">
-        <div class="flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
+        <div class="relative flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
           <h3 class="text-[16px] font-medium text-[#333]">工具</h3>
-          <i class="fas fa-times text-[#999] cursor-pointer" data-close></i>
-        </div>
-        <div class="flex items-center px-[24px] pt-[16px] border-b border-[#f0f0f0]" data-panel-tabs>
-          ${tab('list','工具列表')}
-          ${tab('used','已添加工具'+((AC.usedTools||[]).length?` (${AC.usedTools.length})`:''))}
+          <button class="h-[32px] px-[14px] bg-[#165DFF] text-white text-[13px] rounded-[6px]" data-tool-add-btn><i class="fas fa-plus mr-[4px]"></i>添加工具</button>
         </div>
         <div class="flex-1 flex overflow-hidden">
-          <div class="w-[200px] border-r border-[#f0f0f0] overflow-y-auto py-[8px]" data-tool-list>${renderListHtml()}</div>
-          <div class="flex-1 overflow-y-auto px-[24px] py-[20px]" data-tool-detail>${detail(curTool(), AC.toolPanelTab==='list')}</div>
+          <div class="w-[220px] border-r border-[#f0f0f0] overflow-y-auto py-[8px]" data-tool-list>${renderListHtml(null)}</div>
+          <div class="flex-1 overflow-hidden px-[24px] py-[20px] flex flex-col" data-tool-detail>${detail(null)}</div>
         </div>
       </div>`;
     openDrawer(html, { widthClass:'w-[820px]', onMount:(w)=>{
       const detailBox = w.querySelector('[data-tool-detail]');
       const listBox = w.querySelector('[data-tool-list]');
-      const tabsBox = w.querySelector('[data-panel-tabs]');
-      // 重绘左列表 + 默认选中第一项详情（纯 DOM，不重开抽屉）
-      const rerenderPane = ()=>{
-        listBox.innerHTML = renderListHtml();
-        detailBox.innerHTML = detail(curTool(), AC.toolPanelTab==='list');
+      const addBtn = w.querySelector('[data-tool-add-btn]');
+      // 草稿态：draft 为当前编辑对象（新建/编辑均先在此，点确定才写入 usedTools）；activeId 为列表高亮
+      let draft = null;       // { id, name, desc, tool, runtime, isNew }
+      let activeId = null;    // 当前编辑/高亮的已保存行 id
+      const rerender = ()=>{ listBox.innerHTML = renderListHtml(activeId); detailBox.innerHTML = detail(draft); bindDetail(); };
+      // 编辑已保存行：拷贝为草稿
+      const editRow = (id)=>{
+        const row = (AC.usedTools||[]).find(r=>r.id===id);
+        if(!row) return;
+        draft = { id: row.id, name: row.name||'', desc: row.desc||'', tool: row.tool||'', runtime: ((AC.toolRuntimeConfig||{})[row.id])||'', isNew:false };
+        activeId = id;
+        rerender();
       };
-      // 刷新 tab 头（计数）与选中态
-      const rerenderTabs = ()=>{
-        tabsBox.querySelectorAll('[data-panel-tab]').forEach(el=>{
-          const key = el.getAttribute('data-panel-tab');
-          const active = AC.toolPanelTab===key;
-         el.className = 'px-[4px] pb-[10px] mr-[24px] text-[14px] cursor-pointer border-b-[2px] '+(active?'text-[#165DFF] font-medium border-[#165DFF]':'text-[#666] border-transparent');
-          if(key==='used') el.textContent = '已添加工具'+((AC.usedTools||[]).length?` (${AC.usedTools.length})`:'');
-        });
+      // 提交草稿到 usedTools
+      const commitDraft = ()=>{
+        if(!draft) return;
+        // 内联必填校验：不通过则在字段下红字提示，不写入
+        draft.errName = !(draft.name||'').trim();
+        draft.errTool = !draft.tool;
+        if(draft.errName || draft.errTool){ rerender(); return; }
+        // 描述为空则写入所选工具的默认描述
+        let descVal = (draft.desc||'').trim();
+        if(!descVal){ const bt = findTool(draft.tool); descVal = bt ? (bt.desc||'') : ''; draft.desc = descVal; }
+        const payload = { id: draft.id, name: draft.name.trim(), desc: descVal, tool: draft.tool };
+        const idx = (AC.usedTools||[]).findIndex(r=>r.id===draft.id);
+        if(idx>=0) AC.usedTools[idx] = payload; else AC.usedTools.push(payload);
+        if(!AC.toolRuntimeConfig) AC.toolRuntimeConfig={};
+        if((draft.runtime||'').trim()) AC.toolRuntimeConfig[draft.id] = draft.runtime; else delete AC.toolRuntimeConfig[draft.id];
+        activeId = draft.id;
+        // 确定后保持编辑态：draft 不置空，右侧继续展示当前工具内容
+        draft.isNew = false;
+        draft.errName = false;
+        draft.errTool = false;
+        rerender();
+        showToast('已保存');
       };
-      // tab 切换：仅在弹窗内切换，不重开
-      tabsBox.addEventListener('click',(e)=>{
-        const t = e.target.closest('[data-panel-tab]');
-        if(!t) return;
-        AC.toolPanelTab = t.getAttribute('data-panel-tab');
-        rerenderTabs(); rerenderPane();
+      // 添加工具：新建空草稿（不写入 usedTools，未确定切走即丢弃）
+      addBtn.addEventListener('click',(e)=>{
+        e.stopPropagation();
+        draft = { id: acGenToolId(), name:'', desc:'', tool:'', runtime:'', isNew:true };
+        activeId = null;
+        rerender();
+        const ni = detailBox.querySelector('[data-tool-name]');
+        if(ni) ni.focus();
       });
-      // 左列表点击：切换右侧详情
+      // 左列表：删除（二次确认）/ 选中编辑
       listBox.addEventListener('click',(e)=>{
+        const rm = e.target.closest('[data-tool-remove]');
+        if(rm){
+          e.stopPropagation();
+          const id = rm.getAttribute('data-tool-remove');
+          const row = (AC.usedTools||[]).find(r=>r.id===id);
+          const nm = row ? ((row.name||row.tool)||'该工具') : '该工具';
+          confirmModal({ title:'删除工具', content:`确定删除「${nm}」吗？`, hint:'删除后其运行时配置也将一并移除，且不可恢复。', onConfirm:()=>{
+            acRemoveToolRow(id);
+            // 删除后右侧回落到第一个工具，避免空白；无工具则清空
+            const first = (AC.usedTools||[])[0];
+            if(first){ editRow(first.id); } else { draft=null; activeId=null; rerender(); }
+          }});
+          return;
+        }
         const it = e.target.closest('[data-tool-item]');
         if(!it) return;
-        const arr = AC.toolPanelTab==='used' ? (AC.usedTools||[]) : tools.map(t=>t.name);
-        const idx = parseInt(it.getAttribute('data-tool-item'));
-        listBox.querySelectorAll('[data-tool-item]').forEach((n,i)=>{
-          n.className = 'px-[16px] py-[12px] text-[14px] cursor-pointer border-l-[3px] '+(i===idx?'text-[#165DFF] bg-[#f4f8ff] border-[#165DFF]':'text-[#333] border-transparent hover:bg-[#fafafa]');
+        editRow(it.getAttribute('data-tool-item'));  // 切换编辑其他行，未确认的草稿被丢弃
+      });
+      // 右侧表单事件绑定（每次重绘后重新绑定）
+      function bindDetail(){
+        if(!draft) return;
+        const nameInput = detailBox.querySelector('[data-tool-name]');
+        const descInput = detailBox.querySelector('[data-tool-desc]');
+        const rtInput = detailBox.querySelector('[data-tool-runtime]');
+        const confirmBtn = detailBox.querySelector('[data-tool-confirm]');
+        const cancelBtn = detailBox.querySelector('[data-tool-cancel]');
+        const selBtn = detailBox.querySelector('[data-tool-select-btn]');
+        const selList = detailBox.querySelector('[data-tool-select-list]');
+        const cfgBtn = detailBox.querySelector('[data-panel-config]');
+        if(nameInput) nameInput.addEventListener('input',()=>{ draft.name = nameInput.value; if(draft.errName && draft.name.trim()){ draft.errName=false; rerender(); } });
+        if(descInput) descInput.addEventListener('input',()=>{ draft.desc = descInput.value; });
+        if(rtInput) rtInput.addEventListener('input',()=>{ draft.runtime = rtInput.value; });
+        if(confirmBtn) confirmBtn.addEventListener('click', commitDraft);
+        if(cancelBtn) cancelBtn.addEventListener('click',()=>{
+          // 取消编辑：回落到第一个已保存工具，右侧不留空白；无工具则清空
+          const first = (AC.usedTools||[])[0];
+          if(first){ editRow(first.id); } else { draft=null; activeId=null; rerender(); }
         });
-        const tl = tools.find(t=>t.name===arr[idx]);
-        detailBox.innerHTML = detail(tl, AC.toolPanelTab==='list');
-      });
-      // 右侧详情：插入提示词（仅工具列表 tab）/ 后处理配置
+        if(selBtn && selList){
+          selBtn.addEventListener('click',(ev)=>{ ev.stopPropagation(); selList.classList.toggle('hidden'); });
+          selList.addEventListener('click',(ev)=>{
+            const opt = ev.target.closest('[data-tool-opt]');
+            if(!opt) return;
+            draft.tool = opt.getAttribute('data-tool-opt');
+            draft.errTool = false;
+            detailBox.innerHTML = detail(draft); bindDetail();   // 切工具影响运行时配置区
+          });
+        }
+        if(cfgBtn) cfgBtn.addEventListener('click',()=>{
+          if(!(draft.name||'').trim()){ showToast('请先填写工具名称'); return; }
+          acDeviceStateModal(draft.id, (out)=>{ draft.runtime = out; const ta=detailBox.querySelector('[data-tool-runtime]'); if(ta) ta.value = out; }, (draft.name||'').trim());
+        });
+      }
+      // 点击面板空白关闭下拉
       detailBox.addEventListener('click',(e)=>{
-        const conf = e.target.closest('[data-tool-confirm]');
-        if(conf){ if(acInsertToolToken(conf.getAttribute('data-tool-confirm'))){ showToast('已插入提示词'); AC.toolPanelTab='used'; rerenderTabs(); rerenderPane(); } return; }
-        const cfg = e.target.closest('[data-panel-config]');
-        if(cfg){ acDeviceStateModal(cfg.getAttribute('data-panel-config')); return; }
+        const list = detailBox.querySelector('[data-tool-select-list]');
+        if(list && !list.classList.contains('hidden') && !e.target.closest('[data-tool-select-wrap]')) list.classList.add('hidden');
       });
-      // 运行时配置文本框：编辑即持久化到 AC.toolRuntimeConfig[工具名]
-      detailBox.addEventListener('input',(e)=>{
-        const rt = e.target.closest('[data-tool-runtime]');
-        if(rt){ if(!AC.toolRuntimeConfig) AC.toolRuntimeConfig={}; AC.toolRuntimeConfig[rt.getAttribute('data-tool-runtime')] = rt.value; }
-      });
+      // 初始态：默认选中列表第一个工具并展示其详情（省略手动点选）
+      const firstRow = (AC.usedTools||[])[0];
+      if(firstRow){ editRow(firstRow.id); } else { bindDetail(); }
     } });
   }
 
