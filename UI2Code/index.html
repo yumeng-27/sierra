@@ -2374,189 +2374,205 @@ function acSetScheduleBodyHtml(s){
     if(!Array.isArray(AC.usedTools)) AC.usedTools = [];
     const esc = v => String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const findTool = n => tools.find(t=>t.name===n);
-    // 左侧列表项：工具名 + 底层工具描述 两行展示（hover 显示删除）
+    // 左侧列表项：工具名 + 叉号（常显，点击直接删除）
     const listItem = (row, active)=>{
       const bt = findTool(row.tool);
-      const title = (row.name||'').trim() || (bt ? bt.name : '') || '未命名工具';
-      const sub = (row.desc||'').trim() || (bt ? bt.desc : '');
+      const title = (bt ? bt.name : '') || (row.tool||'') || '未选择工具';
       return `
       <div class="group px-[16px] py-[12px] cursor-pointer border-l-[3px] ${active?'bg-[#f4f8ff] border-[#165DFF]':'border-transparent hover:bg-[#fafafa]'}" data-tool-item="${row.id}">
         <div class="flex items-center justify-between">
           <span class="truncate text-[14px] ${active?'text-[#165DFF]':'text-[#333]'}">${esc(title)}</span>
-          <i class="fas fa-trash-alt text-[#c9cdd4] hover:text-[#f53f3f] text-[12px] ml-[8px] opacity-0 group-hover:opacity-100 shrink-0" data-tool-remove="${row.id}"></i>
+          <i class="fas fa-times text-[#c9cdd4] hover:text-[#f53f3f] text-[13px] ml-[8px] shrink-0" data-tool-remove="${row.id}"></i>
         </div>
-        ${sub?`<div class="text-[12px] text-[#999] mt-[2px] truncate">${esc(sub)}</div>`:''}
       </div>`;
     };
     const renderListHtml = (activeId)=>{
       const arr = AC.usedTools||[];
-      if(!arr.length) return '';
       return arr.map(r=>listItem(r, r.id===activeId)).join('');
     };
-    // 「选择工具」下拉：自定义面板，每项 工具名 + 默认描述 两行
-    const selectOptions = (sel)=> tools.map(t=>`
-      <div class="px-[12px] py-[8px] cursor-pointer hover:bg-[#f4f8ff] ${t.name===sel?'bg-[#f4f8ff]':''}" data-tool-opt="${esc(t.name)}">
+    // 「添加工具」下拉：自定义面板，每项 工具名 + 默认描述 两行（点击即添加）
+    const selectOptions = ()=> tools.map(t=>`
+      <div class="px-[12px] py-[8px] cursor-pointer hover:bg-[#f4f8ff]" data-tool-opt="${esc(t.name)}">
         <div class="text-[14px] text-[#333]">${esc(t.name)}</div>
         <div class="text-[12px] text-[#999] mt-[2px] truncate">${esc(t.desc||'')}</div>
       </div>`).join('');
-    // 右侧详情：表单（名称必填 / 描述可空 / 选择工具下拉 / 运行时配置 / 确定+取消）；draft 为草稿对象
+    // 入参只读展示：横向卡片式（参数名 + 类型 + 必填红星），自动换行
+    const paramsBlock = (bt)=>{
+      const arr = (bt && bt.params && bt.params.length) ? bt.params : [];
+      if(!arr.length) return `<div class="px-[12px] py-[8px] text-[13px] text-[#999]">无入参</div>`;
+      const cards = arr.map(p=>{
+        const type = (p.t && String(p.t).trim()) ? `<span class="text-[13px] text-[#c9cdd4] font-mono ml-[8px]">${esc(p.t)}</span>` : '';
+        return `<div class="inline-flex items-center px-[14px] py-[10px] border border-[#e5e6eb] rounded-[8px] bg-[#f7f8fa]"><span class="text-[13px] text-[#333] font-mono break-all">${esc(p.k)}</span>${type}<span class="text-[13px] text-[#f53f3f] font-mono ml-[8px]">*</span></div>`;
+      }).join('');
+      return `<div class="flex flex-wrap gap-[12px]">${cards}</div>`;
+    };
+    // 右侧详情：工具名（只读）/ 描述（可改）/ 入参（只读）/ 返回值（只读）/ 运行时配置（可改）/ 确定
     const detail = (draft)=>{
-      if(!draft) return `<div class="text-[13px] text-[#999]">${(AC.usedTools||[]).length?'请选择左侧工具，或点击右上角「添加工具」。':'暂无工具，点击右上角「添加工具」开始配置。'}</div>`;
+      if(!draft) return '';
+      const bt = findTool(draft.tool);
       const rtCfg = draft.runtime || '';
-      const selText = draft.tool ? esc(draft.tool) : '<span class="text-[#999]">请选择工具</span>';
-      const errName = draft.errName ? `<div class="text-[12px] text-[#f53f3f] mt-[4px]">请输入工具名称</div>` : '';
-      const errTool = draft.errTool ? `<div class="text-[12px] text-[#f53f3f] mt-[4px]">请选择工具</div>` : '';
-      // 运行时配置区：始终展示（未选工具也可编辑）
-      const rtBlock = `
-        <div class="mb-[8px]"><div class="flex items-center justify-between mb-[6px]"><div class="text-[13px] text-[#333]">运行时配置</div>
-          <span class="text-[#1473e6] text-[13px] cursor-pointer shrink-0" data-panel-config><i class="fas fa-cog mr-[4px]"></i>解析并配置翻译</span></div>
-          <div class="text-[12px] text-[#999] mb-[8px]">工具执行后的额外配置，如状态码转译模版、字段映射等。</div>
-          <textarea class="w-full h-[180px] p-[10px] border border-[#e5e6eb] rounded-[6px] text-[12px] font-mono leading-[1.6] bg-[#f7f8fa] text-[#4e5969]" placeholder="点击「解析并配置翻译」生成运行时配置，或手动编写 JSON" data-tool-runtime>${esc(rtCfg)}</textarea>
-        </div>`;
       return `
         <div class="flex-1 overflow-y-auto pr-[2px]">
-          <div class="mb-[20px]"><div class="text-[13px] text-[#333] mb-[6px]">名称 <span class="text-[#f53f3f]">*</span></div>
-            <input class="w-full h-[38px] px-[12px] border ${draft.errName?'border-[#f53f3f]':'border-[#e5e6eb]'} rounded-[6px] text-[14px]" placeholder="输入工具名称" value="${esc(draft.name||'')}" data-tool-name>${errName}</div>
+          <div class="mb-[20px]"><div class="text-[13px] text-[#333] mb-[6px]">工具名</div>
+            <div class="w-full h-[38px] px-[12px] border border-[#e5e6eb] rounded-[6px] text-[14px] bg-[#f7f8fa] text-[#4e5969] flex items-center">${esc((bt?bt.name:'')||draft.tool||'')}</div></div>
           <div class="mb-[20px]"><div class="text-[13px] text-[#333] mb-[6px]">描述</div>
             <textarea class="w-full h-[80px] px-[12px] py-[10px] border border-[#e5e6eb] rounded-[6px] text-[14px] leading-[1.6]" placeholder="输入工具描述（留空将使用默认描述）" data-tool-desc>${esc(draft.desc||'')}</textarea></div>
-          <div class="mb-[20px]"><div class="text-[13px] text-[#333] mb-[6px]">选择工具 <span class="text-[#f53f3f]">*</span></div>
-            <div class="relative" data-tool-select-wrap>
-              <div class="w-full h-[38px] px-[12px] border ${draft.errTool?'border-[#f53f3f]':'border-[#e5e6eb]'} rounded-[6px] text-[14px] bg-white flex items-center justify-between cursor-pointer" data-tool-select-btn>
-                <span class="truncate">${selText}</span><i class="fas fa-chevron-down text-[#999] text-[12px] ml-[8px]"></i></div>
-              <div class="hidden absolute left-0 right-0 top-[42px] z-[20] max-h-[240px] overflow-y-auto bg-white border border-[#e5e6eb] rounded-[6px] shadow-lg" data-tool-select-list>${selectOptions(draft.tool)}</div>
-            </div>
-            ${errTool}
-            <div class="text-[12px] text-[#999] mt-[6px]">从当前 iot 平台可用工具中选择要使用的工具。</div></div>
-          ${rtBlock}
+          <div class="mb-[20px]"><div class="text-[13px] text-[#333] mb-[6px]">入参</div>
+            ${paramsBlock(bt)}</div>
+          <div class="mb-[20px]"><div class="text-[13px] text-[#333] mb-[6px]">返回值</div>
+            <div class="w-full p-[10px] border border-[#e5e6eb] rounded-[6px] text-[13px] font-mono leading-[1.6] bg-[#f7f8fa] text-[#4e5969] break-all">${esc((bt&&bt.ret)||'—')}</div></div>
+          <div class="mb-[8px]"><div class="text-[13px] text-[#333] mb-[6px]">运行时配置</div>
+            <div class="text-[12px] text-[#999] mb-[8px]">工具执行后的额外配置，如状态码转译模版、字段映射等。</div>
+            <textarea class="w-full h-[180px] p-[10px] border border-[#e5e6eb] rounded-[6px] text-[12px] font-mono leading-[1.6] bg-[#f7f8fa] text-[#4e5969]" placeholder="手动编写 JSON" data-tool-runtime>${esc(rtCfg)}</textarea></div>
         </div>
         <div class="pt-[14px] mt-[4px] border-t border-[#f0f0f0] flex justify-end shrink-0">
-          <button class="h-[36px] px-[24px] border border-[#d9d9d9] rounded-[6px] text-[14px] text-[#333] mr-[12px] hover:bg-[#f5f5f5]" data-tool-cancel>取消</button>
           <button class="h-[36px] px-[24px] bg-[#165DFF] text-white rounded-[6px] text-[14px]" data-tool-confirm>确定</button>
         </div>`;
     };
+    // 空态：不分左右框，整块文字提示（添加入口在右上角）
+    const emptyHtml = `
+      <div class="flex-1 flex flex-col items-center justify-center text-center px-[24px]">
+        <div class="text-[14px] text-[#999]">暂无工具，请点击右上角「添加工具」</div>
+      </div>`;
+    // 常规态：左列表 + 右详情
+    const listPaneHtml = ()=>`
+      <div class="flex-1 flex overflow-hidden">
+        <div class="w-[220px] border-r border-[#f0f0f0] overflow-y-auto py-[8px]" data-tool-list>${renderListHtml(null)}</div>
+        <div class="flex-1 overflow-hidden px-[24px] py-[20px] flex flex-col" data-tool-detail></div>
+      </div>`;
+    const bodyHtml = (AC.usedTools||[]).length ? listPaneHtml() : emptyHtml;
     const html = `
       <div class="h-full flex flex-col">
         <div class="relative flex items-center justify-between px-[24px] py-[16px] border-b border-[#f0f0f0]">
           <h3 class="text-[16px] font-medium text-[#333]">工具</h3>
-          <button class="h-[32px] px-[14px] bg-[#165DFF] text-white text-[13px] rounded-[6px]" data-tool-add-btn><i class="fas fa-plus mr-[4px]"></i>添加工具</button>
+          <div class="relative" data-tool-add-wrap>
+            <button class="h-[32px] px-[14px] bg-[#165DFF] text-white text-[13px] rounded-[6px]" data-tool-add-btn><i class="fas fa-plus mr-[4px]"></i>添加工具</button>
+            <div class="hidden absolute right-0 top-[40px] z-[30] w-[280px] max-h-[300px] overflow-y-auto bg-white border border-[#e5e6eb] rounded-[6px] shadow-lg" data-tool-add-list>${selectOptions()}</div>
+          </div>
         </div>
-        <div class="flex-1 flex overflow-hidden">
-          <div class="w-[220px] border-r border-[#f0f0f0] overflow-y-auto py-[8px]" data-tool-list>${renderListHtml(null)}</div>
-          <div class="flex-1 overflow-hidden px-[24px] py-[20px] flex flex-col" data-tool-detail>${detail(null)}</div>
-        </div>
+        <div class="flex-1 flex flex-col overflow-hidden" data-tool-body>${bodyHtml}</div>
       </div>`;
     openDrawer(html, { widthClass:'w-[820px]', onMount:(w)=>{
-      const detailBox = w.querySelector('[data-tool-detail]');
-      const listBox = w.querySelector('[data-tool-list]');
+      const bodyBox = w.querySelector('[data-tool-body]');
+      const addWrap = w.querySelector('[data-tool-add-wrap]');
       const addBtn = w.querySelector('[data-tool-add-btn]');
-      // 草稿态：draft 为当前编辑对象（新建/编辑均先在此，点确定才写入 usedTools）；activeId 为列表高亮
-      let draft = null;       // { id, name, desc, tool, runtime, isNew }
-      let activeId = null;    // 当前编辑/高亮的已保存行 id
-      const rerender = ()=>{ listBox.innerHTML = renderListHtml(activeId); detailBox.innerHTML = detail(draft); bindDetail(); };
-      // 编辑已保存行：拷贝为草稿
+      const addList = w.querySelector('[data-tool-add-list]');
+      // 草稿态：仅用于「已在列表中的行」编辑描述/运行时，点确定才回写；activeId 为列表高亮
+      let draft = null;       // { id, tool, desc, runtime }
+      let activeId = null;
+      // 当前引用（空态/常规态切换后需重新获取）
+      let listBox = null, detailBox = null;
+      const refreshBodyRefs = ()=>{
+        listBox = w.querySelector('[data-tool-list]');
+        detailBox = w.querySelector('[data-tool-detail]');
+      };
+      // 根据 usedTools 是否为空，切换 body 布局
+      const renderBody = ()=>{
+        bodyBox.innerHTML = (AC.usedTools||[]).length ? listPaneHtml() : emptyHtml;
+        refreshBodyRefs();
+        bindBody();
+      };
+      // 重绘列表 + 详情
+      const rerender = ()=>{
+        if(!listBox || !detailBox){ renderBody(); return; }
+        listBox.innerHTML = renderListHtml(activeId);
+        detailBox.innerHTML = detail(draft);
+        bindDetail();
+      };
+      // 编辑已保存行：拷贝为草稿（工具名/入参/返回值不可改，仅描述/运行时可改）
       const editRow = (id)=>{
         const row = (AC.usedTools||[]).find(r=>r.id===id);
         if(!row) return;
-        draft = { id: row.id, name: row.name||'', desc: row.desc||'', tool: row.tool||'', runtime: ((AC.toolRuntimeConfig||{})[row.id])||'', isNew:false };
+        draft = { id: row.id, tool: row.tool||'', desc: row.desc||'', runtime: ((AC.toolRuntimeConfig||{})[row.id])||'' };
         activeId = id;
         rerender();
       };
-      // 提交草稿到 usedTools
+      // 提交草稿：仅回写描述/运行时（工具名不变）；未点确定则丢弃
       const commitDraft = ()=>{
         if(!draft) return;
-        // 内联必填校验：不通过则在字段下红字提示，不写入
-        draft.errName = !(draft.name||'').trim();
-        draft.errTool = !draft.tool;
-        if(draft.errName || draft.errTool){ rerender(); return; }
-        // 描述为空则写入所选工具的默认描述
+        const bt = findTool(draft.tool);
         let descVal = (draft.desc||'').trim();
-        if(!descVal){ const bt = findTool(draft.tool); descVal = bt ? (bt.desc||'') : ''; draft.desc = descVal; }
-        const payload = { id: draft.id, name: draft.name.trim(), desc: descVal, tool: draft.tool };
+        if(!descVal){ descVal = bt ? (bt.desc||'') : ''; draft.desc = descVal; }
         const idx = (AC.usedTools||[]).findIndex(r=>r.id===draft.id);
-        if(idx>=0) AC.usedTools[idx] = payload; else AC.usedTools.push(payload);
+        if(idx>=0){ AC.usedTools[idx].desc = descVal; }
         if(!AC.toolRuntimeConfig) AC.toolRuntimeConfig={};
         if((draft.runtime||'').trim()) AC.toolRuntimeConfig[draft.id] = draft.runtime; else delete AC.toolRuntimeConfig[draft.id];
         activeId = draft.id;
-        // 确定后保持编辑态：draft 不置空，右侧继续展示当前工具内容
-        draft.isNew = false;
-        draft.errName = false;
-        draft.errTool = false;
         rerender();
-        showToast('已保存');
+        drawerToast('已保存');
       };
-      // 添加工具：新建空草稿（不写入 usedTools，未确定切走即丢弃）
-      addBtn.addEventListener('click',(e)=>{
-        e.stopPropagation();
-        draft = { id: acGenToolId(), name:'', desc:'', tool:'', runtime:'', isNew:true };
-        activeId = null;
-        rerender();
-        const ni = detailBox.querySelector('[data-tool-name]');
-        if(ni) ni.focus();
+      // 抽屉内居中提示（不用全局 showToast，避免显示在整个页面中央）
+      const drawerToast = (text)=>{
+        const panel = w.querySelector('.drawer-panel') || w;
+        const tip = document.createElement('div');
+        tip.className = 'toast-anim absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] bg-[#333] text-white text-[14px] px-[20px] py-[10px] rounded-[6px] shadow-lg';
+        tip.textContent = text;
+        panel.appendChild(tip);
+        setTimeout(()=>tip.remove(), 1500);
+      };
+      // 下拉选中工具：直接加入 usedTools（描述取默认），并进入编辑态
+      const addTool = (toolName)=>{
+        const bt = findTool(toolName);
+        if(!bt) return;
+        const id = acGenToolId();
+        AC.usedTools.push({ id, name: bt.name, desc: bt.desc||'', tool: bt.name });
+        addList.classList.add('hidden');
+        renderBody();       // 空态→常规态或刷新列表
+        editRow(id);        // 进入编辑
+      };
+      // 顶部「添加工具」下拉开关
+      const toggleAddList = (ev)=>{ if(ev) ev.stopPropagation(); addList.classList.toggle('hidden'); };
+      if(addBtn) addBtn.addEventListener('click', toggleAddList);
+      // 下拉项点击 = 添加
+      addList.addEventListener('click',(ev)=>{
+        const opt = ev.target.closest('[data-tool-opt]');
+        if(!opt) return;
+        addTool(opt.getAttribute('data-tool-opt'));
       });
-      // 左列表：删除（二次确认）/ 选中编辑
-      listBox.addEventListener('click',(e)=>{
-        const rm = e.target.closest('[data-tool-remove]');
-        if(rm){
-          e.stopPropagation();
-          const id = rm.getAttribute('data-tool-remove');
-          const row = (AC.usedTools||[]).find(r=>r.id===id);
-          const nm = row ? ((row.name||row.tool)||'该工具') : '该工具';
-          confirmModal({ title:'删除工具', content:`确定删除「${nm}」吗？`, hint:'删除后其运行时配置也将一并移除，且不可恢复。', onConfirm:()=>{
-            acRemoveToolRow(id);
-            // 删除后右侧回落到第一个工具，避免空白；无工具则清空
-            const first = (AC.usedTools||[])[0];
-            if(first){ editRow(first.id); } else { draft=null; activeId=null; rerender(); }
-          }});
-          return;
-        }
-        const it = e.target.closest('[data-tool-item]');
-        if(!it) return;
-        editRow(it.getAttribute('data-tool-item'));  // 切换编辑其他行，未确认的草稿被丢弃
-      });
-      // 右侧表单事件绑定（每次重绘后重新绑定）
+      // 绑定 body 内（列表 + 空态添加按钮）事件
+      function bindBody(){
+        if(!listBox) return;
+        listBox.addEventListener('click',(e)=>{
+          const rm = e.target.closest('[data-tool-remove]');
+          if(rm){
+            e.stopPropagation();
+            const id = rm.getAttribute('data-tool-remove');
+            const row = (AC.usedTools||[]).find(r=>r.id===id);
+            const nm = row ? ((row.name||row.tool)||'该工具') : '该工具';
+            confirmModal({ title:'删除工具', content:`确定删除「${nm}」吗？`, hint:'删除后其运行时配置也将一并移除，且不可恢复。', onConfirm:()=>{
+              acRemoveToolRow(id);
+              const first = (AC.usedTools||[])[0];
+              if(first){ activeId=first.id; renderBody(); editRow(first.id); }
+              else { draft=null; activeId=null; renderBody(); }
+            }});
+            return;
+          }
+          const it = e.target.closest('[data-tool-item]');
+          if(!it) return;
+          editRow(it.getAttribute('data-tool-item'));  // 切换编辑其他行，未确认草稿丢弃
+        });
+      }
+      // 右侧表单事件（每次重绘后重新绑定）：仅描述/运行时/确定
       function bindDetail(){
-        if(!draft) return;
-        const nameInput = detailBox.querySelector('[data-tool-name]');
+        if(!draft || !detailBox) return;
         const descInput = detailBox.querySelector('[data-tool-desc]');
         const rtInput = detailBox.querySelector('[data-tool-runtime]');
         const confirmBtn = detailBox.querySelector('[data-tool-confirm]');
-        const cancelBtn = detailBox.querySelector('[data-tool-cancel]');
-        const selBtn = detailBox.querySelector('[data-tool-select-btn]');
-        const selList = detailBox.querySelector('[data-tool-select-list]');
-        const cfgBtn = detailBox.querySelector('[data-panel-config]');
-        if(nameInput) nameInput.addEventListener('input',()=>{ draft.name = nameInput.value; if(draft.errName && draft.name.trim()){ draft.errName=false; rerender(); } });
         if(descInput) descInput.addEventListener('input',()=>{ draft.desc = descInput.value; });
         if(rtInput) rtInput.addEventListener('input',()=>{ draft.runtime = rtInput.value; });
         if(confirmBtn) confirmBtn.addEventListener('click', commitDraft);
-        if(cancelBtn) cancelBtn.addEventListener('click',()=>{
-          // 取消编辑：回落到第一个已保存工具，右侧不留空白；无工具则清空
-          const first = (AC.usedTools||[])[0];
-          if(first){ editRow(first.id); } else { draft=null; activeId=null; rerender(); }
-        });
-        if(selBtn && selList){
-          selBtn.addEventListener('click',(ev)=>{ ev.stopPropagation(); selList.classList.toggle('hidden'); });
-          selList.addEventListener('click',(ev)=>{
-            const opt = ev.target.closest('[data-tool-opt]');
-            if(!opt) return;
-            draft.tool = opt.getAttribute('data-tool-opt');
-            draft.errTool = false;
-            detailBox.innerHTML = detail(draft); bindDetail();   // 切工具影响运行时配置区
-          });
-        }
-        if(cfgBtn) cfgBtn.addEventListener('click',()=>{
-          if(!(draft.name||'').trim()){ showToast('请先填写工具名称'); return; }
-          acDeviceStateModal(draft.id, (out)=>{ draft.runtime = out; const ta=detailBox.querySelector('[data-tool-runtime]'); if(ta) ta.value = out; }, (draft.name||'').trim());
-        });
       }
-      // 点击面板空白关闭下拉
-      detailBox.addEventListener('click',(e)=>{
-        const list = detailBox.querySelector('[data-tool-select-list]');
-        if(list && !list.classList.contains('hidden') && !e.target.closest('[data-tool-select-wrap]')) list.classList.add('hidden');
+      // 点击面板空白关闭添加下拉
+      w.addEventListener('click',(e)=>{
+        if(!addList.classList.contains('hidden') && !e.target.closest('[data-tool-add-wrap]')) addList.classList.add('hidden');
       });
-      // 初始态：默认选中列表第一个工具并展示其详情（省略手动点选）
+      // 初始态：有工具选中第一个，无工具展示空态
+      refreshBodyRefs();
+      bindBody();
       const firstRow = (AC.usedTools||[])[0];
-      if(firstRow){ editRow(firstRow.id); } else { bindDetail(); }
+      if(firstRow){ editRow(firstRow.id); }
     } });
+
   }
 
   /* ================= 事件绑定 ================= */
