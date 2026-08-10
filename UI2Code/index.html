@@ -1904,7 +1904,6 @@ const wrap = openModal(html);
       </tr>`).join('') : `<tr><td colspan="6" class="p-[24px] text-center text-[#999]">暂无指令</td></tr>`;
     return `
       <div class="flex items-center mb-[16px] gap-[12px]">
-        <span class="text-[13px] text-[#666]">执行反馈:</span>${switchHtml('acset-fb', s.feedback==='reply')}
         <input class="ml-auto h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="搜索指令">
         <button class="h-[32px] px-[16px] bg-[#1473e6] text-white rounded-[6px] text-[13px]" data-ins-add><i class="fas fa-plus mr-[4px]"></i>新建指令</button>
       </div>
@@ -1987,6 +1986,8 @@ function acSetScheduleBodyHtml(s){
             <span id="acset-title-text" class="text-[#333]">${s.name}</span>
             <input id="acset-title" class="hidden font-medium text-[#333] border border-[#1473e6] rounded-[4px] px-[6px] py-[2px] outline-none" value="${s.name}">
             <i class="fas fa-pen text-[#86909c] text-[13px] ml-[6px] cursor-pointer hover:text-[#1473e6]" id="acset-title-edit"></i>
+            <label class="flex items-center text-[13px] font-normal ml-[20px] cursor-pointer"><input type="radio" name="acset-fb-edit" value="reply" class="mr-[6px]" ${s.feedback!=='silent'?'checked':''}>开启回复</label>
+            <label class="flex items-center text-[13px] font-normal ml-[16px] cursor-pointer"><input type="radio" name="acset-fb-edit" value="silent" class="mr-[6px]" ${s.feedback==='silent'?'checked':''}>静默执行</label>
           </div>
         </div>
         <div class="flex items-center justify-between px-[24px] pt-[12px] border-b border-[#f0f0f0]">
@@ -2014,6 +2015,9 @@ function acSetScheduleBodyHtml(s){
           if(tiText) tiText.classList.add('hidden');
           ti.classList.remove('hidden'); ti.focus(); ti.select();
         });
+        w.querySelectorAll('input[name="acset-fb-edit"]').forEach(r=>r.addEventListener('change',()=>{
+          if(r.checked){ s.feedback=r.value; AC.promptDirty=true; }
+        }));
         // tab 切换：抽屉内局部刷新，不重建抽屉
         if((State.currentAppData||{}).iotPlatform==='集贤' && AC.acSetTab!=='list') AC.acSetTab='list';
         w.querySelectorAll('[data-set-tab]').forEach(b=>b.addEventListener('click',()=>{ AC.acSetTab=b.getAttribute('data-set-tab'); acSetRenderTab(w,s); }));
@@ -2138,8 +2142,8 @@ function acSetScheduleBodyHtml(s){
         </div>
         <div class="flex-1 overflow-y-auto p-[24px]">
           <div class="mb-[20px]"><div class="text-[14px] text-[#333] mb-[8px]">名称 <span class="text-[#ff4d4f]">*</span></div><input id="acset-name" class="w-full h-[36px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" placeholder="请输入指令集名称"></div>
-          <div><div class="text-[14px] text-[#333] mb-[8px]">执行反馈</div>
-            <label class="flex items-center text-[13px] mb-[8px]"><input type="radio" name="acset-fb" value="reply" checked class="mr-[8px]">回复（默认）</label>
+          <div><div class="text-[14px] text-[#333] mb-[8px]">是否需要执行反馈</div>
+            <label class="flex items-center text-[13px] mb-[8px]"><input type="radio" name="acset-fb" value="reply" checked class="mr-[8px]">开启回复</label>
             <label class="flex items-center text-[13px]"><input type="radio" name="acset-fb" value="silent" class="mr-[8px]">静默执行</label>
           </div>
         </div>

@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>调试窗 · 模拟端侧事件上报 · 交互原型</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f5f6f8; color: #1f2329; }
+  .wrap { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+  .title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .sub { font-size: 12px; color: #8a9099; margin-bottom: 16px; }
+  .panel { background: #fff; border: 1px solid #e5e6eb; border-radius: 8px; overflow: hidden; }
+  .panel-head { padding: 12px 16px; border-bottom: 1px solid #eef0f3; font-weight: 600; font-size: 14px; }
+  .tabs { display: flex; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid #eef0f3; }
+  .tab { padding: 8px 14px; font-size: 13px; cursor: pointer; border-radius: 6px 6px 0 0; color: #61656b; border: 1px solid transparent; border-bottom: none; }
+  .tab.active { color: #1664ff; background: #f0f5ff; border-color: #d6e4ff; font-weight: 600; }
+  .body { padding: 16px; }
+  .field { margin-bottom: 14px; }
+  .label { font-size: 12px; color: #61656b; margin-bottom: 6px; display: block; }
+  .row { display: flex; gap: 12px; }
+  .row > .field { flex: 1; }
+  input, select, textarea { width: 100%; border: 1px solid #d9dce0; border-radius: 6px; padding: 8px 10px; font-size: 13px; font-family: inherit; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: #1664ff; }
+  textarea { resize: vertical; font-family: "SF Mono", Menlo, Consolas, monospace; line-height: 1.5; }
+  .hint { font-size: 11px; color: #8a9099; margin-top: 4px; }
+  .toolbar { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .btn { padding: 8px 16px; font-size: 13px; border-radius: 6px; border: 1px solid #d9dce0; background: #fff; cursor: pointer; color: #1f2329; }
+  .btn:hover { border-color: #1664ff; color: #1664ff; }
+  .btn.primary { background: #1664ff; color: #fff; border-color: #1664ff; }
+  .btn.primary:hover { background: #0d52d9; color: #fff; }
+  .btn.ghost { border-color: transparent; color: #1664ff; }
+  .chip { display: inline-block; padding: 4px 10px; margin: 0 6px 6px 0; font-size: 12px; border: 1px solid #d9dce0; border-radius: 14px; cursor: pointer; background: #fafbfc; }
+  .chip:hover { border-color: #1664ff; color: #1664ff; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #e8f3ff; color: #1664ff; margin-left: 6px; }
+  .env-tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #fff3e0; color: #d97706; border: 1px solid #ffe0b2; }
+  .divider { height: 1px; background: #eef0f3; margin: 16px 0; }
+  .trace { background: #0f172a; color: #d1d5db; border-radius: 6px; padding: 12px 14px; font-family: "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.7; white-space: pre-wrap; min-height: 60px; }
+  .trace .k { color: #7dd3fc; }
+  .trace .g { color: #86efac; }
+  .trace .y { color: #fde68a; }
+  .step { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px dashed #eef0f3; }
+  .step:last-child { border-bottom: none; }
+  .step .dot { width: 20px; height: 20px; border-radius: 50%; background: #e8f3ff; color: #1664ff; font-size: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .step .st { font-size: 13px; }
+  .step .sd { font-size: 12px; color: #61656b; margin-top: 2px; }
+  .hidden { display: none; }
+  .empty { color: #8a9099; font-size: 12px; text-align: center; padding: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="title">调试窗 · 模拟端侧事件上报（交互原型）</div>
+  <div class="sub">静态原型，仅演示交互流程；不含真实接口调用。与《调试窗模拟端侧事件上报-接口对接需求文档.md》配套。</div>
+
+  <div class="panel">
+    <div class="panel-head">调试输入 <span class="badge">Debug</span></div>
+    <div class="tabs">
+      <div class="tab active" data-tab="query" onclick="switchTab('query')">模拟用户 query</div>
+      <div class="tab" data-tab="event" onclick="switchTab('event')">模拟端侧事件上报</div>
+    </div>
+
+    <!-- 模拟用户 query -->
+    <div class="body" id="tab-query">
+      <div class="field">
+        <label class="label">用户输入</label>
+        <textarea rows="3" placeholder="例如：我的床现在是什么模式？"></textarea>
+      </div>
+      <div class="toolbar">
+        <button class="btn primary" onclick="alert('（原型）已发送模拟 query')">发送</button>
+      </div>
+    </div>
+
+    <!-- 模拟端侧事件上报 -->
+    <div class="body hidden" id="tab-event">
+      <div class="row">
+        <div class="field">
+          <label class="label">deviceId <span style="color:#f5222d">*</span></label>
+          <input id="deviceId" placeholder="设备ID（可用调试专用ID）">
+        </div>
+        <div class="field">
+          <label class="label">token <span style="color:#f5222d">*</span></label>
+          <input id="token" placeholder="设备token（是否需真实待服务端确认）">
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label class="label">事件类型</label>
+          <select id="eventType" onchange="fillTemplate()">
+            <option value="状态上报">状态上报</option>
+            <option value="按键">按键</option>
+            <option value="唤醒">唤醒</option>
+            <option value="传感器">传感器</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="label">注入位置（保真度）</label>
+          <select id="inject">
+            <option value="C">方案C · 服务端接收层（最真实，推荐）</option>
+            <option value="B">方案B · 服务端预处理后入口（中）</option>
+            <option value="A">方案A · 直灌flow（低，兜底）</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label">事件 payload（上行 JSON，与真实端侧上报格式一致）</label>
+        <textarea id="payload" rows="10"></textarea>
+        <div class="hint" id="jsonHint">JSON 校验：待发送</div>
+      </div>
+
+      <div class="field">
+        <label class="label">常用模板 / 历史（点击回填）</label>
+        <div>
+          <span class="chip" onclick="fillTemplate('状态上报')">床状态上报</span>
+          <span class="chip" onclick="fillTemplate('传感器')">心率传感器</span>
+          <span class="chip" onclick="fillTemplate('按键')">物理按键</span>
+          <span class="chip" onclick="pullFromDevice()">从设备草稿拉取上行状态</span>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn primary" onclick="sendEvent()">模拟上报</button>
+        <button class="btn" onclick="validateJSON(true)">校验 JSON</button>
+        <span style="align-self:center"><span class="env-tag">调试环境 · 不污染真实设备</span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 执行链路 trace -->
+  <div class="panel" style="margin-top:16px">
+    <div class="panel-head">执行链路 Trace <span class="badge" id="traceId">traceId: -</span></div>
+    <div class="body">
+      <div id="traceEmpty" class="empty">点击「模拟上报」后，这里展示：事件 → 服务端预处理 → flow 执行 → 模型输入 的完整过程。</div>
+      <div id="traceSteps" class="hidden"></div>
+      <div class="divider"></div>
+      <div class="label">原始返回（原型 mock）</div>
+      <div class="trace" id="traceRaw">—</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  var TEMPLATES = {
+    "状态上报": {
+      "bedsteadStatus": 2,
+      "underBedLight": 1,
+      "volume": 60
+    },
+    "传感器": {
+      "mattress": { "left": { "monitor": { "heartRate": 66, "breathRate": 15 } } }
+    },
+    "按键": {
+      "key": "power",
+      "action": "longPress",
+      "duration": 1200
+    }
+  };
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(function (t) {
+      t.classList.toggle('active', t.getAttribute('data-tab') === name);
+    });
+    document.getElementById('tab-query').classList.toggle('hidden', name !== 'query');
+    document.getElementById('tab-event').classList.toggle('hidden', name !== 'event');
+  }
+
+  function fillTemplate(type) {
+    if (type) document.getElementById('eventType').value = type;
+    var t = type || document.getElementById('eventType').value;
+    if (TEMPLATES[t]) {
+      document.getElementById('payload').value = JSON.stringify(TEMPLATES[t], null, 2);
+    } else {
+      document.getElementById('payload').value = '';
+    }
+    validateJSON(false);
+  }
+
+  function pullFromDevice() {
+    // 原型：模拟从设备草稿(deviceId/token)拉取真实上行状态
+    document.getElementById('deviceId').value = document.getElementById('deviceId').value || 'debug-device-001';
+    document.getElementById('token').value = document.getElementById('token').value || 'debug-token-xxxx';
+    document.getElementById('eventType').value = '状态上报';
+    document.getElementById('payload').value = JSON.stringify({
+      success: true, code: 200, message: "操作成功",
+      data: { bedsteadStatus: 2, underBedLight: 1, volume: 60 },
+      timestamp: 1785334704485
+    }, null, 2);
+    validateJSON(false);
+  }
+
+  function validateJSON(alertOnOk) {
+    var hint = document.getElementById('jsonHint');
+    var raw = document.getElementById('payload').value.trim();
+    if (!raw) { hint.textContent = 'JSON 校验：payload 为空'; hint.style.color = '#f5222d'; return false; }
+    try {
+      JSON.parse(raw);
+      hint.textContent = 'JSON 校验：通过 ✓'; hint.style.color = '#16a34a';
+      if (alertOnOk) alert('JSON 格式正确');
+      return true;
+    } catch (e) {
+      hint.textContent = 'JSON 校验失败：' + e.message; hint.style.color = '#f5222d';
+      return false;
+    }
+  }
+
+  function sendEvent() {
+    var deviceId = document.getElementById('deviceId').value.trim();
+    var token = document.getElementById('token').value.trim();
+    if (!deviceId || !token) { alert('请先填写 deviceId 和 token'); return; }
+    if (!validateJSON(false)) { alert('payload JSON 不合法，请检查'); return; }
+
+    var eventType = document.getElementById('eventType').value;
+    var inject = document.getElementById('inject').value;
+    var payload = JSON.parse(document.getElementById('payload').value);
+    var traceId = 'dbg-' + Date.now().toString(36);
+    document.getElementById('traceId').textContent = 'traceId: ' + traceId;
+
+    // mock 请求体
+    var req = { debug: true, sessionId: 'debug-session', deviceId: deviceId, token: token, eventType: eventType, payload: payload, timestamp: Date.now(), traceId: traceId };
+
+    // 根据注入位置展示不同链路步骤
+    var steps = [];
+    steps.push({ n: 1, t: '调试窗提交模拟事件', d: eventType + ' · 注入方案 ' + inject });
+    if (inject === 'C') { steps.push({ n: 2, t: '服务端接收层收到上报', d: '模拟设备身份校验（调试标记）' }); }
+    if (inject === 'C' || inject === 'B') {
+      steps.push({ n: steps.length + 1, t: '服务端预处理', d: '鉴权 / 路由 / 状态翻译 templateRender' });
+      steps.push({ n: steps.length + 1, t: '翻译后文本', d: '预设模式=平躺模式 床底灯=开启 音量大小=60' });
+    } else {
+      steps.push({ n: 2, t: '（方案A）跳过服务端', d: '未覆盖鉴权/路由/状态翻译' });
+    }
+    steps.push({ n: steps.length + 1, t: '进入智能体 flow', d: 'flow 被触发并执行' });
+    steps.push({ n: steps.length + 1, t: '模型输入', d: '翻译文本作为上下文喂给大模型' });
+
+    var html = '';
+    steps.forEach(function (s) {
+      html += '<div class="step"><div class="dot">' + s.n + '</div><div><div class="st">' + s.t + '</div><div class="sd">' + s.d + '</div></div></div>';
+    });
+    document.getElementById('traceSteps').innerHTML = html;
+    document.getElementById('traceSteps').classList.remove('hidden');
+    document.getElementById('traceEmpty').classList.add('hidden');
+
+    var resp = {
+      success: true, traceId: traceId,
+      data: {
+        flowTriggered: true,
+        preprocessResult: (inject === 'A') ? null : '预设模式=平躺模式 床底灯=开启 音量大小=60',
+        flowResult: 'flow 执行完成（原型 mock）'
+      }
+    };
+    document.getElementById('traceRaw').innerHTML =
+      '<span class="y">// 请求体 request</span>\n' + JSON.stringify(req, null, 2) +
+      '\n\n<span class="g">// 响应体 response</span>\n' + JSON.stringify(resp, null, 2);
+  }
+
+  // 初始化
+  fillTemplate('状态上报');
+</script>
+</body>
+</html>
