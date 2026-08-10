@@ -1298,22 +1298,17 @@ const wrap = openModal(html);
         <i class="fas fa-times ml-[6px] opacity-0 group-hover:opacity-100 hover:text-[#ff4d4f]" data-ac-set-del="${s.id}"></i>
       </span>`).join('');
     const setBar = AC.promptType==='auto' ? `
-      <div class="mt-[12px] flex flex-wrap items-center">
+      <div class="text-[14px] text-[#333] mt-[16px] mb-[4px]">指令集</div>
+      <div class="flex flex-wrap items-center">
         ${setBtns}
         <span class="inline-flex items-center px-[14px] py-[6px] rounded-[6px] text-[13px] cursor-pointer mb-[8px] border border-dashed border-[#1473e6] text-[#1473e6]" data-ac-set-create><i class="fas fa-plus mr-[4px]"></i>新建指令集</span>
       </div>`:'';
-    // 垫句区
+    // 垫句列表
     const fillers = AC.fillerSentences.map((f,i)=>`
       <div class="flex items-center mb-[8px]">
         <input class="flex-1 h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" value="${f}" data-ac-filler-idx="${i}">
         <i class="fas fa-trash-alt ml-[8px] text-[#999] cursor-pointer hover:text-[#ff4d4f]" data-ac-filler-del="${i}"></i>
       </div>`).join('');
-    const fillerBox = AC.isTaskPlannerEnabled ? `
-      <div class="p-[16px] bg-[#f4f8ff] rounded-[8px] mt-[16px]">
-        <div class="text-[14px] text-[#333] mb-[12px]">垫句（最多5条）</div>
-        ${fillers}
-        <span class="text-[#1473e6] text-[13px] cursor-pointer" data-ac-filler-add><i class="fas fa-plus mr-[4px]"></i>添加垫句</span>
-      </div>`:'';
     // 三步流程：示例提示词
     const EXAMPLES = {
       intent: '你是一个中文智能家居设备控制意图二分类器。\n基于【历史对话】【候选控制指令列表】【当前 query】，判断用户最新一句话是否属于"设备控制意图"。',
@@ -1357,11 +1352,46 @@ const wrap = openModal(html);
         ${inner}
       </div>`;
     };
+    // 任务规划器：可折叠框（默认收起），标题栏右侧含开关+折叠箭头
+    // 开关关闭时不可展开；开启后自动展开，展开后可再收起
+    const plannerOpen = AC.isTaskPlannerEnabled && AC.expandedSteps.planner;
+    const plannerInner = plannerOpen ? `
+      <div class="px-[16px] pb-[16px]">
+        <div class="p-[16px] bg-[#f4f8ff] rounded-[8px]">
+          <div class="flex items-center mb-[12px]">
+            <span class="text-[14px] text-[#333]">垫句（最多5条）</span>
+            <span class="relative ml-[6px] group inline-flex items-center">
+              <i class="far fa-question-circle text-[#999] cursor-help"></i>
+              <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-[8px] hidden group-hover:block w-[240px] px-[10px] py-[8px] bg-[#333] text-white text-[12px] leading-[1.5] rounded-[6px] z-[10] whitespace-normal">垫句是在任务规划器处理期间，用于填补等待时间、提升交互自然度的过渡语句（如“明白。”“稍等一下。”），会在正式回复前先行播报。</span>
+            </span>
+          </div>
+          ${fillers}
+          <span class="text-[#1473e6] text-[13px] cursor-pointer" data-ac-filler-add><i class="fas fa-plus mr-[4px]"></i>添加垫句</span>
+        </div>
+        <div class="mt-[16px]">
+          <div class="text-[14px] text-[#333] mb-[8px]">提示词</div>
+          <textarea class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6]">${EXAMPLES.planner||''}</textarea>
+        </div>
+      </div>`:'';
+    const plannerBox = `
+      <div class="border border-[#f0f0f0] rounded-[8px] mb-[12px]">
+        <div class="flex items-center justify-between px-[16px] py-[12px]">
+          <div class="pr-[12px] ${AC.isTaskPlannerEnabled?'cursor-pointer':''}" ${AC.isTaskPlannerEnabled?'data-ac-step="planner"':''}>
+            <div class="text-[14px] text-[#333]">2. 任务规划器</div>
+            <div class="text-[12px] text-[#999] mt-[2px] leading-[1.5]">完成设备能力匹配、参数校验、澄清与闲聊分流，并生成任务规划。简单控制（仅单步控制，无需多轮澄清）可关闭任务规划器，可提高响应速度</div>
+          </div>
+          <div class="flex items-center shrink-0">
+            ${switchHtml('ac-planner', AC.isTaskPlannerEnabled)}
+            <i class="fas fa-chevron-${plannerOpen?'up':'down'} ml-[12px] ${AC.isTaskPlannerEnabled?'text-[#999] cursor-pointer':'text-[#d9d9d9] cursor-not-allowed'}" ${AC.isTaskPlannerEnabled?'data-ac-step="planner"':''}></i>
+          </div>
+        </div>
+        ${plannerInner}
+      </div>`;
     const flow = `
       <div class="mt-[16px]">
         ${step('intent','1. 意图准入判断','判断用户请求是否属于设备控制意图')}
-        ${AC.isTaskPlannerEnabled?step('planner','2. 任务规划器','完成设备能力匹配、参数校验、澄清与闲聊分流，并生成任务规划。简单控制（仅单步控制，无需多轮澄清）可关闭任务规划器，可提高响应速度'):''}
-        ${step('tool',(AC.isTaskPlannerEnabled?'3':'2')+'. 工具执行','将任务转化为可执行的标准工具调用')}
+        ${plannerBox}
+        ${step('tool','3. 工具执行','将任务转化为可执行的标准工具调用')}
       </div>`;
     const dirtyBanner = (AC.promptDirty && isAuto && hasSet) ? `
       <div class="flex items-center justify-between px-[16px] py-[10px] mt-[16px] bg-[#fffbe6] border border-[#ffe58f] rounded-[8px]">
@@ -1383,17 +1413,12 @@ const wrap = openModal(html);
         </div>
         ${setBar}
         ${dirtyBanner}
-        <div class="flex items-center justify-between mt-[20px]">
-          <div class="flex items-center">
-            <span class="text-[14px] text-[#333] mr-[12px]">任务规划器</span>
-            ${switchHtml('ac-planner', AC.isTaskPlannerEnabled)}
-          </div>
+        <div class="flex items-center justify-end mt-[20px]">
           <div class="flex items-center">
             <span class="text-[#1473e6] text-[13px] cursor-pointer mr-[16px]" data-ac-tool-panel>工具配置</span>
             <span class="text-[#1473e6] text-[13px] cursor-pointer" data-ac-tutorial><i class="fas fa-book mr-[4px]"></i>编写教程</span>
           </div>
         </div>
-        ${fillerBox}
         ${flow}
       </div>`:'';
     // 非默认智能体：产品级共享配置说明 + 跳转默认智能体入口
@@ -2590,7 +2615,7 @@ function acSetScheduleBodyHtml(s){
       if(sw){
         const id = sw.getAttribute('data-switch');
         if(id==='ac-aiot'){ AC.aiotEnabled=!AC.aiotEnabled; renderApp(); return; }
-        if(id==='ac-planner'){ AC.isTaskPlannerEnabled=!AC.isTaskPlannerEnabled; renderApp(); return; }
+        if(id==='ac-planner'){ AC.isTaskPlannerEnabled=!AC.isTaskPlannerEnabled; AC.expandedSteps.planner=AC.isTaskPlannerEnabled; renderApp(); return; }
         if(id && id.indexOf('ac-strat-')===0){ const k=id.replace('ac-strat-',''); AC.strategies[k]=!AC.strategies[k]; renderApp(); return; }
       }
       if(t.closest('[data-ac-go-index]')){ setCurrentPage('index'); return; }
