@@ -475,39 +475,36 @@
 
   <!-- ============ 指令库 InstructionLibraryPage ============ -->
   <script>
-  const IL_CLICKABLE_TITLES = ['退出对话','电量查询','音量调节'];
   const InstructionLib = { detail:null, detailTab:'list' };
+  // 指令库停用后：仅保留「系统指令集」（author=system）与「旧版指令集」（isOld=true），其余卡片隐藏
   const IL_MOCK = [
-    { title:'指令集2.0', desc:'111', author:'jd_40d11979fdb53', time:'2026-07-21 13:51', isOld:false },
-    { title:'灯的指令集', desc:'灯', author:'jd_40d11979fdb53', time:'2026-06-26 15:53', isOld:false },
-    { title:'我的测试指令集', desc:'测试指令集', author:'jd_40d11979fdb53', time:'2026-05-25 16:31', isOld:false },
-    { title:'自定义指令集2', desc:'我的自定义指令集2', author:'jd_40d11979fdb53', time:'2026-05-09 13:59', isOld:true },
-    { title:'自定义指令集1', desc:'我的自定义指令集', author:'jd_40d11979fdb53', time:'2026-05-09 13:59', isOld:true },
-    { title:'测试指令集', desc:'11', author:'jd_40d11979fdb53', time:'2026-04-14 16:11', isOld:true },
-    { title:'退出对话', desc:'', author:'system', time:'2026-04-02 21:21', isOld:false },
-    { title:'电量查询', desc:'', author:'system', time:'2026-03-28 16:31', isOld:false },
-    { title:'音量调节', desc:'', author:'system', time:'2026-03-28 16:30', isOld:false },
+    { title:'自定义指令集2', desc:'我的自定义指令集2', author:'jd_40d11979fdb53', time:'2026-05-09 13:59', isOld:true, isSystem:false },
+    { title:'自定义指令集1', desc:'我的自定义指令集', author:'jd_40d11979fdb53', time:'2026-05-09 13:59', isOld:true, isSystem:false },
+    { title:'测试指令集', desc:'11', author:'jd_40d11979fdb53', time:'2026-04-14 16:11', isOld:true, isSystem:false },
+    { title:'退出对话', desc:'', author:'system', time:'2026-04-02 21:21', isOld:false, isSystem:true },
+    { title:'电量查询', desc:'', author:'system', time:'2026-03-28 16:31', isOld:false, isSystem:true },
+    { title:'音量调节', desc:'', author:'system', time:'2026-03-28 16:30', isOld:false, isSystem:true },
   ];
-  function ilIsClickable(item){ return item.isOld || IL_CLICKABLE_TITLES.includes(item.title); }
+  // 仅展示系统指令集与旧版指令集
+  function ilVisibleList(){ return IL_MOCK.filter(it=>it.isSystem || it.isOld); }
+  function ilIsClickable(item){ return item.isOld || item.isSystem; }
+  // 指令数据（可变，支持删除；系统指令不可删除）
+  const IL_COMMANDS = {
+    '自定义指令集2':[{name:'自定义指令A',code:'custom_a',prompt:'执行自定义A',slot:'无槽位',time:'2026/5/9 14:00:12'}],
+    '自定义指令集1':[{name:'自定义指令1',code:'custom_1',prompt:'执行自定义1',slot:'无槽位',time:'2026/5/9 13:59:48'}],
+    '测试指令集':[{name:'测试',code:'test_01',prompt:'测试提示词',slot:'无槽位',time:'2026/4/14 16:12:00'}],
+    '退出对话':[{name:'退出对话',code:'exit_dialog',prompt:'再见/退出/结束对话',slot:'无槽位',time:'2026/4/2 21:21:30'}],
+    '电量查询':[{name:'电量查询',code:'battery_query',prompt:'查一下电量/还有多少电',slot:'无槽位',time:'2026/3/28 16:31:20'}],
+    '音量调节':[{name:'调大音量',code:'volume_up',prompt:'声音大一点',slot:'音量:+',time:'2026/3/28 16:30:10'},{name:'调小音量',code:'volume_down',prompt:'声音小一点',slot:'音量:-',time:'2026/3/28 16:30:40'}],
+  };
   function ilCommandsFor(title){
-    const map = {
-      '指令集2.0':[{name:'开启空气检测',code:'air_check_on',prompt:'帮我检测一下空气',slot:'无槽位',time:'2026/7/21 13:52:10'}],
-      '灯的指令集':[{name:'开灯',code:'light_on',prompt:'把灯打开',slot:'无槽位',time:'2026/6/26 15:54:02'},{name:'关灯',code:'light_off',prompt:'把灯关掉',slot:'无槽位',time:'2026/6/26 15:55:31'}],
-      '我的测试指令集':[{name:'这是一个测试指令',code:'08042',prompt:'提示词',slot:'无槽位',time:'2026/5/25 16:32:06'}],
-      '自定义指令集2':[{name:'自定义指令A',code:'custom_a',prompt:'执行自定义A',slot:'无槽位',time:'2026/5/9 14:00:12'}],
-      '自定义指令集1':[{name:'自定义指令1',code:'custom_1',prompt:'执行自定义1',slot:'无槽位',time:'2026/5/9 13:59:48'}],
-      '测试指令集':[{name:'测试',code:'test_01',prompt:'测试提示词',slot:'无槽位',time:'2026/4/14 16:12:00'}],
-      '退出对话':[{name:'退出对话',code:'exit_dialog',prompt:'再见/退出/结束对话',slot:'无槽位',time:'2026/4/2 21:21:30'}],
-      '电量查询':[{name:'电量查询',code:'battery_query',prompt:'查一下电量/还有多少电',slot:'无槽位',time:'2026/3/28 16:31:20'}],
-      '音量调节':[{name:'调大音量',code:'volume_up',prompt:'声音大一点',slot:'音量:+',time:'2026/3/28 16:30:10'},{name:'调小音量',code:'volume_down',prompt:'声音小一点',slot:'音量:-',time:'2026/3/28 16:30:40'}],
-    };
-    return map[title] || [{name:'示例指令',code:'demo_01',prompt:'示例提示词',slot:'无槽位',time:'2026/1/1 00:00:00'}];
+    if(!IL_COMMANDS[title]) IL_COMMANDS[title] = [{name:'示例指令',code:'demo_01',prompt:'示例提示词',slot:'无槽位',time:'2026/1/1 00:00:00'}];
+    return IL_COMMANDS[title];
   }
   function ilDetailHtml(item){
-    const tab = InstructionLib.detailTab || 'list';
     const cmds = ilCommandsFor(item.title);
-    const tabBtn = (key,label)=>`<div data-il-tab="${key}" class="cursor-pointer px-[16px] h-[40px] flex items-center text-[14px] ${tab===key?'text-[#1473e6] border-b-2 border-[#1473e6] font-medium':'text-[#666] border-b-2 border-transparent'}">${label}</div>`;
-    const rows = cmds.map(c=>`
+    const isSys = !!item.isSystem;
+    const rows = cmds.map((c,i)=>`
       <tr class="border-b border-[#f0f0f0]">
         <td class="py-[12px] px-[16px] text-[14px] text-[#333]">${c.name}</td>
         <td class="py-[12px] px-[16px] text-[14px] text-[#666]">${c.code}</td>
@@ -516,23 +513,20 @@
         <td class="py-[12px] px-[16px] text-[14px] text-[#999]">${c.time}</td>
         <td class="py-[12px] px-[16px] text-[14px]">
           <span class="text-[#ccc] cursor-not-allowed mr-[16px]">编辑</span>
-          <span class="text-[#ccc] cursor-not-allowed">删除</span>
+          ${isSys
+            ? `<span class="text-[#ccc] cursor-not-allowed">删除</span>`
+            : `<span data-il-del="${i}" class="text-[#ff4d4f] cursor-pointer hover:underline">删除</span>`}
         </td>
       </tr>`).join('');
-    let body = '';
-    if (tab==='list') {
-      body = `
-      <div class="bg-[#fffbe6] border border-[#ffe58f] rounded-[4px] px-[16px] py-[10px] mb-[16px] flex items-center text-[13px] text-[#614700]">
-        <i class="fas fa-exclamation-circle text-[#faad14] mr-[8px]"></i>
-        此指令集为旧版格式,仅支持查看,不再支持编辑与新增。
-      </div>
-      <div class="flex items-center justify-between mb-[16px]">
-        <div class="relative w-[280px]">
-          <i class="fas fa-search absolute left-[12px] top-1/2 -translate-y-1/2 text-[#bbb] text-[13px]"></i>
-          <input disabled placeholder="搜索指令名称" class="w-full h-[34px] pl-[34px] pr-[12px] border border-[#e5e5e5] rounded-[4px] text-[14px] bg-[#fafafa] text-[#999]" />
-        </div>
-        <button class="h-[34px] px-[16px] rounded-[4px] bg-[#f0f0f0] text-[#bbb] cursor-not-allowed text-[14px]"><i class="fas fa-plus text-[12px] mr-[6px]"></i>新建指令</button>
-      </div>
+    const emptyState = `
+      <div class="flex flex-col items-center justify-center py-[120px]">
+        <i class="far fa-comment-dots text-[64px] text-[#d9d9d9] mb-[16px]"></i>
+        <span class="text-[14px] text-[#999]">还没有指令，选取系统指令，或者新建你的专属指令库吧！</span>
+      </div>`;
+    const alertText = isSys
+      ? '此指令集为系统内置指令集，仅支持查看与删除自定义指令，系统指令不可删除。'
+      : '此指令集为旧版格式，不支持新增或编辑指令，但在应用中仍可正常使用。如需修改指令，请新建一个指令集并重新配置。';
+    const table = `
       <table class="w-full border-collapse">
         <thead><tr class="bg-[#fafafa] text-left text-[13px] text-[#999]">
           <th class="py-[12px] px-[16px] font-normal">指令名称</th>
@@ -544,38 +538,42 @@
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
-    } else {
-      body = `<div class="py-[60px] text-center text-[14px] text-[#999]">该功能在只读模式下不可用</div>`;
-    }
+    const body = `
+      <div class="bg-[#fffbe6] border border-[#ffe58f] rounded-[4px] px-[16px] py-[10px] mb-[16px] flex items-center text-[13px] text-[#614700]">
+        <i class="fas fa-exclamation-circle text-[#faad14] mr-[8px]"></i>
+        ${alertText}
+      </div>
+      ${cmds.length ? table : emptyState}`;
+    const oldTag = item.isOld
+      ? `<span class="inline-flex items-center px-[8px] py-[2px] bg-[#f0f0f0] text-[#999] text-[12px] rounded-[2px]"><i class="fas fa-lock text-[10px] mr-[4px]"></i>旧版·只读</span>`
+      : `<span class="inline-flex items-center px-[8px] py-[2px] bg-[#e6f4ff] text-[#1473e6] text-[12px] rounded-[2px]">系统</span>`;
     return `
-    <div class="w-full h-full flex flex-col p-[24px] bg-[#f4f5f7] overflow-y-auto">
-      <div class="flex items-center text-[13px] text-[#999] mb-[16px]">
-        <span data-il-back class="cursor-pointer hover:text-[#1473e6]">指令库</span>
-        <i class="fas fa-chevron-right text-[10px] mx-[8px]"></i>
-        <span class="text-[#333]">${item.title}指令集详情</span>
-      </div>
-      <div class="flex items-center mb-[20px]">
-        <span data-il-back class="cursor-pointer mr-[12px] text-[#666] hover:text-[#1473e6]"><i class="fas fa-arrow-left"></i></span>
-        <span class="text-[20px] font-medium text-[#333] mr-[12px]">${item.title}</span>
-        <span class="inline-flex items-center px-[8px] py-[2px] bg-[#f0f0f0] text-[#999] text-[12px] rounded-[2px]"><i class="fas fa-lock text-[10px] mr-[4px]"></i>旧版 · 只读</span>
-      </div>
-      <div class="bg-white rounded-[8px] border border-[#e5e5e5] flex flex-col flex-1">
-        <div class="flex items-center px-[16px] border-b border-[#f0f0f0]">
-          ${tabBtn('list','指令列表')}
-          ${tabBtn('timer','定时指令')}
-          ${tabBtn('batch','批量测试')}
+    <div class="w-full h-full flex flex-col bg-white overflow-y-auto">
+      <div class="flex items-center justify-between px-[24px] h-[64px] border-b border-[#f0f0f0]">
+        <div class="flex items-center text-[20px] font-bold text-[#333]">
+          <span data-il-back class="cursor-pointer text-[#999] font-normal hover:text-[#1473e6]">指令库</span>
+          <span class="mx-[8px] text-[#999] font-normal">/</span>
+          <span>${item.title} 指令集详情</span>
+          <span class="ml-[12px]">${oldTag}</span>
         </div>
-        <div class="p-[16px] flex-1">${body}</div>
+        <div class="flex items-center gap-[12px]">
+          <div class="relative w-[280px]">
+            <input disabled placeholder="搜索指令控制项、指令编码" class="w-full h-[34px] pl-[12px] pr-[34px] border border-[#e5e5e5] rounded-[4px] text-[14px] bg-[#f5f5f5] text-[#999]" />
+            <i class="fas fa-search absolute right-[12px] top-1/2 -translate-y-1/2 text-[#999] text-[13px]"></i>
+          </div>
+          <button class="h-[34px] px-[16px] rounded-[4px] bg-[#f0f0f0] text-[#bbb] cursor-not-allowed text-[14px]" disabled>新建指令</button>
+        </div>
       </div>
+      <div class="p-[24px] flex-1">${body}</div>
     </div>`;
   }
   window.Pages.instructionLibrary = function(){
     if (InstructionLib.detail) return ilDetailHtml(InstructionLib.detail);
-    const mockData = IL_MOCK;
-    const cards = mockData.map((item,idx)=>{
+    const mockData = ilVisibleList();
+    const cards = mockData.map((item)=>{
       const clickable = ilIsClickable(item);
       return `
-      <div ${clickable?`data-il-open="${idx}" class="cursor-pointer w-[calc(25%-12px)] min-w-[240px] bg-[#fcfcfc] border border-[#e5e5e5] rounded-[8px] p-[16px] flex flex-col transition hover:border-[#4f46e5] hover:shadow-md"`:`class="w-[calc(25%-12px)] min-w-[240px] bg-[#fcfcfc] border border-[#e5e5e5] rounded-[8px] p-[16px] flex flex-col"`}>
+      <div ${clickable?`data-il-open="${item.title}" class="cursor-pointer w-[calc(25%-12px)] min-w-[240px] bg-[#fcfcfc] border border-[#e5e5e5] rounded-[8px] p-[16px] flex flex-col transition hover:border-[#4f46e5] hover:shadow-md"`:`class="w-[calc(25%-12px)] min-w-[240px] bg-[#fcfcfc] border border-[#e5e5e5] rounded-[8px] p-[16px] flex flex-col"`}>
         <div class="flex items-center mb-[8px]">
           ${item.isOld?`<span class="inline-block px-[4px] py-[2px] bg-[#f0f0f0] text-[#999] text-[12px] rounded-[2px] mr-[8px]">旧版</span>`:''}
           <span class="text-[16px] font-medium text-[#666] truncate">${item.title}</span>
@@ -593,8 +591,7 @@
     <div class="w-full h-full flex flex-col p-[24px] bg-[#f4f5f7] overflow-y-auto">
       <div class="flex items-start justify-between mb-[20px]">
         <div class="flex flex-col">
-          <h1 class="text-[20px] font-bold text-[#333] mb-[8px]">指令库</h1>
-          <span class="text-[13px] text-[#666]">指令库已停用,历史数据仅作留存展示,不再支持新增、编辑与调用。</span>
+          <h1 class="text-[20px] font-bold text-[#333]">指令库</h1>
         </div>
         <div class="flex items-center gap-[12px]">
           <div class="relative w-[240px]">
@@ -607,20 +604,19 @@
       <div class="w-full mb-[20px] p-[16px] bg-[#fff7e6] border border-[#ffd591] rounded-[8px] flex items-start relative" data-il-alert>
         <i class="fas fa-bullhorn text-[#faad14] text-[18px] mt-[2px] mr-[12px]"></i>
         <div class="flex flex-col">
-          <span class="text-[14px] font-medium text-[#333] mb-[8px]">指令数据已迁移,指令库暂时停用</span>
+          <span class="text-[14px] font-medium text-[#333] mb-[8px]">指令库功能停用通知</span>
           <div class="text-[13px] text-[#666] leading-relaxed">
-            指令库不再支持新增指令集与指令,历史数据仅作留存展示,<strong>不再支持编辑与调用。</strong> 原有数据已按类型迁移至以下位置:<br/>
-            · <strong>AIOT 指令集</strong> 已迁移至 <a href="#" class="text-[#1473e6] hover:underline">产品管理 → 智能体 → AIOT 设备控制</a><br/>
-            · 旧版自定义指令、系统指令 已迁移至 <a href="#" class="text-[#1473e6] hover:underline">「指令」模块</a>
+            指令库功能暂时停用，不再支持新增指令集与指令，原有数据已迁移至以下位置:<br/>
+            · 5月21日后新建的自定义指令集已迁移至 <a href="#" class="text-[#1473e6] hover:underline">产品管理 → 智能体 → AIOT 指令</a>。<br/>
+            · 旧版自定义指令集（5月21日前的自定义指令集）、系统指令集可在 <a href="#" class="text-[#1473e6] hover:underline">产品管理 → 智能体 → 指令</a> 部分选用。
           </div>
         </div>
         <button data-il-alert-close class="absolute right-[16px] top-[16px] text-[#999] hover:text-[#333]"><i class="fas fa-times text-[14px]"></i></button>
       </div>
       <div class="flex flex-col">
-        <div class="flex items-center text-[12px] text-[#999] mb-[16px]"><i class="fas fa-lock mr-[6px]"></i> 以下为历史留存数据，已置灰不可编辑、调用或删除</div>
         <div class="flex flex-wrap gap-[16px]">${cards}</div>
         <div class="flex items-center justify-end mt-[24px] text-[13px] text-[#666]">
-          <span>共 11 条</span>
+          <span>共 ${mockData.length} 条</span>
           <span class="mx-[12px]">&lt;</span>
           <span class="w-[28px] h-[28px] flex items-center justify-center border border-[#1473e6] text-[#1473e6] rounded-[4px] bg-white">1</span>
           <span class="mx-[12px]">&gt;</span>
@@ -633,11 +629,11 @@
     const root = document.getElementById('app');
     const close = root.querySelector('[data-il-alert-close]');
     if(close) close.addEventListener('click',()=>{ const a=root.querySelector('[data-il-alert]'); if(a) a.remove(); });
-    // 卡片点击 -> 进入只读详情
+    // 卡片点击 -> 进入详情
     root.querySelectorAll('[data-il-open]').forEach(el=>{
       el.addEventListener('click',()=>{
-        const idx = parseInt(el.getAttribute('data-il-open'),10);
-        const item = IL_MOCK[idx];
+        const title = el.getAttribute('data-il-open');
+        const item = IL_MOCK.find(it=>it.title===title);
         if(!item) return;
         InstructionLib.detail = item;
         InstructionLib.detailTab = 'list';
@@ -651,11 +647,16 @@
         renderApp();
       });
     });
-    // 详情页 Tab 切换
-    root.querySelectorAll('[data-il-tab]').forEach(el=>{
+    // 详情页删除指令（系统指令不可删除，已在渲染层禁用）
+    root.querySelectorAll('[data-il-del]').forEach(el=>{
       el.addEventListener('click',()=>{
-        InstructionLib.detailTab = el.getAttribute('data-il-tab');
-        renderApp();
+        const item = InstructionLib.detail;
+        if(!item) return;
+        const i = parseInt(el.getAttribute('data-il-del'),10);
+        const cmds = ilCommandsFor(item.title);
+        const target = cmds[i];
+        if(!target) return;
+        confirmModal({ title:'删除指令', content:`确定删除指令「${target.name}」吗？`, onConfirm:()=>{ cmds.splice(i,1); renderApp(); } });
       });
     });
   };
@@ -1016,6 +1017,9 @@ const wrap = openModal(html);
     debugToken: '',
     debugLocation: '',
     debugLanguage: '中文',
+    debugStarted: false,
+    debugInput: '',
+    debugMessages: [],
     scheduleBySet: {
       'set-1': { create:true, cancel:false, query:false, once:true, cycle:false, grains:{ hour:false, day:false, week:false, month:false }, cmds:[{ name:'灯', code:'light', type:'控制项' }] }
     },
@@ -1184,7 +1188,7 @@ const wrap = openModal(html);
     const customChips = AC.customSkills.map(cs=>`<div class="flex items-center px-[12px] py-[6px] border border-[#e5e5e5] rounded-[4px] bg-white"><span class="text-[14px] text-[#333] mr-[8px]">${cs.name}</span><span class="bg-[#f6ffed] text-[#52c41a] border border-[#b7eb8f] text-[12px] px-[4px] py-[2px] rounded-[2px] mr-[8px]">自定义</span><i class="fas fa-times text-[#999] text-[12px] cursor-pointer hover:text-[#e1251b]" data-ac-custom-remove="${cs.id}"></i></div>`).join('');
     const empty = AC.selectedSkillIds.length===0 && AC.customSkills.length===0 ? `<span class="text-[14px] text-[#999] py-[4px]">暂无技能，请添加</span>`:'';
     return `
-    <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
+    <div class="mb-[32px]">
       <div class="flex items-center mb-[16px] relative">
         <h2 class="text-[16px] font-medium text-[#333] mr-[16px]">技能</h2>
         <span class="text-[#1473e6] text-[14px] cursor-pointer hover:underline mr-[16px]" data-ac-skill-add><i class="fas fa-plus mr-[4px]"></i>添加技能</span>
@@ -1228,7 +1232,7 @@ const wrap = openModal(html);
         <i class="fas fa-times ml-[10px] text-[#ccc] opacity-0 group-hover:opacity-100 hover:text-[#ff4d4f]" data-ac-cmd-del="${c.id}"></i>
       </div>`).join('');
      return `
-    <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
+    <div class="mb-[32px]">
       <div class="flex items-center mb-[16px]">
         <h2 class="text-[16px] font-medium text-[#333] mr-[16px]">指令</h2>
         <div class="relative">
@@ -1301,12 +1305,12 @@ const wrap = openModal(html);
       <div class="text-[14px] text-[#333] mt-[16px] mb-[4px]">指令集</div>
       <div class="flex flex-wrap items-center">
         ${setBtns}
-        <span class="inline-flex items-center px-[14px] py-[6px] rounded-[6px] text-[13px] cursor-pointer mb-[8px] border border-dashed border-[#1473e6] text-[#1473e6]" data-ac-set-create><i class="fas fa-plus mr-[4px]"></i>新建指令集</span>
+        <span class="inline-flex items-center px-[14px] py-[6px] rounded-[6px] text-[13px] cursor-pointer mb-[8px] text-[#1473e6]" data-ac-set-create><i class="fas fa-plus mr-[4px]"></i>新建指令集</span>
       </div>`:'';
     // 垫句列表
     const fillers = AC.fillerSentences.map((f,i)=>`
       <div class="flex items-center mb-[8px]">
-        <input class="flex-1 h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" value="${f}" data-ac-filler-idx="${i}">
+        <input class="w-1/4 h-[32px] px-[12px] border border-[#d9d9d9] rounded-[6px] text-[13px]" value="${f}" data-ac-filler-idx="${i}">
         <i class="fas fa-trash-alt ml-[8px] text-[#999] cursor-pointer hover:text-[#ff4d4f]" data-ac-filler-del="${i}"></i>
       </div>`).join('');
     // 三步流程：示例提示词
@@ -1357,9 +1361,9 @@ const wrap = openModal(html);
     const plannerOpen = AC.isTaskPlannerEnabled && AC.expandedSteps.planner;
     const plannerInner = plannerOpen ? `
       <div class="px-[16px] pb-[16px]">
-        <div class="p-[16px] bg-[#f4f8ff] rounded-[8px]">
+        <div class="rounded-[8px]">
           <div class="flex items-center mb-[12px]">
-            <span class="text-[14px] text-[#333]">垫句（最多5条）</span>
+            <span class="text-[14px] text-[#333]">垫句</span>
             <span class="relative ml-[6px] group inline-flex items-center">
               <i class="far fa-question-circle text-[#999] cursor-help"></i>
               <span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-[8px] hidden group-hover:block w-[240px] px-[10px] py-[8px] bg-[#333] text-white text-[12px] leading-[1.5] rounded-[6px] z-[10] whitespace-normal">垫句是在任务规划器处理期间，用于填补等待时间、提升交互自然度的过渡语句（如“明白。”“稍等一下。”），会在正式回复前先行播报。</span>
@@ -1375,15 +1379,13 @@ const wrap = openModal(html);
       </div>`:'';
     const plannerBox = `
       <div class="border border-[#f0f0f0] rounded-[8px] mb-[12px]">
-        <div class="flex items-center justify-between px-[16px] py-[12px]">
-          <div class="pr-[12px] ${AC.isTaskPlannerEnabled?'cursor-pointer':''}" ${AC.isTaskPlannerEnabled?'data-ac-step="planner"':''}>
-            <div class="text-[14px] text-[#333]">2. 任务规划器</div>
-            <div class="text-[12px] text-[#999] mt-[2px] leading-[1.5]">完成设备能力匹配、参数校验、澄清与闲聊分流，并生成任务规划。简单控制（仅单步控制，无需多轮澄清）可关闭任务规划器，可提高响应速度</div>
-          </div>
-          <div class="flex items-center shrink-0">
+        <div class="px-[16px] py-[12px]">
+          <div class="flex items-center">
+            <div class="text-[14px] text-[#333] mr-[12px] ${AC.isTaskPlannerEnabled?'cursor-pointer':''}" ${AC.isTaskPlannerEnabled?'data-ac-step="planner"':''}>2. 任务规划器</div>
             ${switchHtml('ac-planner', AC.isTaskPlannerEnabled)}
-            <i class="fas fa-chevron-${plannerOpen?'up':'down'} ml-[12px] ${AC.isTaskPlannerEnabled?'text-[#999] cursor-pointer':'text-[#d9d9d9] cursor-not-allowed'}" ${AC.isTaskPlannerEnabled?'data-ac-step="planner"':''}></i>
+            <i class="fas fa-chevron-${plannerOpen?'up':'down'} ml-auto ${AC.isTaskPlannerEnabled?'text-[#999] cursor-pointer':'text-[#d9d9d9] cursor-not-allowed'}" ${AC.isTaskPlannerEnabled?'data-ac-step="planner"':''}></i>
           </div>
+          <div class="text-[12px] text-[#999] mt-[6px] leading-[1.5]">完成设备能力匹配、参数校验、澄清与闲聊分流，并生成任务规划。简单控制（仅单步控制，无需多轮澄清）可关闭任务规划器，可提高响应速度</div>
         </div>
         ${plannerInner}
       </div>`;
@@ -1435,12 +1437,10 @@ const wrap = openModal(html);
       ? `<div class="relative"><div class="pointer-events-none opacity-60 select-none">${body}</div></div>`
       : body;
     return `
-    <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
-      <div class="flex items-center justify-between mb-[16px]">
-        <div class="flex items-center">
-          <h2 class="text-[16px] font-medium text-[#333]">AIoT指令控制</h2>
-        </div>
-        <div class="flex items-center"><span class="text-[13px] text-[#666] mr-[12px]">开启AIoT</span>${switchHtml('ac-aiot', enabled)}</div>
+    <div class="mb-[32px]">
+      <div class="flex items-center mb-[16px]">
+        <h2 class="text-[16px] font-medium text-[#333] mr-[16px]">AIoT指令</h2>
+        <div class="flex items-center">${switchHtml('ac-aiot', enabled)}</div>
       </div>
       ${readonlyBanner}
       ${bodyWrap}
@@ -1726,18 +1726,17 @@ const wrap = openModal(html);
   function acStrategyHtml(){
     const row = (key,label,show)=>{
       if(!show) return '';
+      const on = AC.strategies[key];
       return `
-      <div class="flex items-center justify-between px-[16px] py-[14px] border border-[#f0f0f0] rounded-[8px] mb-[12px]">
-        <span class="text-[14px] text-[#333]">${label}</span>
-        <div class="flex items-center">
-          <i class="fas fa-pen text-[#999] cursor-pointer mr-[16px] hover:text-[#1473e6]" data-ac-strat-edit="${key}"></i>
-          ${switchHtml('ac-strat-'+key, AC.strategies[key])}
-        </div>
+      <div class="flex items-center mb-[20px]">
+        <span class="text-[14px] text-[#333] w-[80px] shrink-0">${label}</span>
+        ${switchHtml('ac-strat-'+key, on)}
+        ${on?`<span class="inline-flex items-center ml-[24px] text-[14px] text-[#1473e6] cursor-pointer hover:underline" data-ac-strat-edit="${key}"><i class="fas fa-pen text-[13px] mr-[6px]"></i>编辑</span>`:''}
       </div>`;
     };
     return `
-    <div class="mb-[32px] pt-[24px] border-t border-[#f0f0f0]">
-      <div class="flex items-center mb-[16px]"><h2 class="text-[16px] font-medium text-[#333]">交互策略</h2></div>
+    <div class="mb-[32px]">
+      <div class="mb-[16px]"><h2 class="text-[16px] font-medium text-[#333]">交互策略配置</h2><div class="text-[13px] text-[#999] mt-[4px]">此处可配置详情相关的策略内容。</div></div>
       ${row('intro','开场白', State.currentAppVersion==='standard')}
       ${row('push','静默推送', true)}
       ${row('feedback','事件反馈', true)}
@@ -1802,11 +1801,25 @@ const wrap = openModal(html);
               </div>
               <div>
                 <label class="block text-[14px] text-[#333] mb-[6px]">device_id</label>
-                <input type="text" value="${AC.debugDeviceId}" placeholder="输入 device_id" class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none" data-debug-field="debugDeviceId">
+                <div class="relative">
+                  <select class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none appearance-none bg-white" data-debug-field="debugDeviceId">
+                    <option value="" ${AC.debugDeviceId===''?'selected':''}>输入 device_id</option>
+                    <option value="dev-001" ${AC.debugDeviceId==='dev-001'?'selected':''}>dev-001</option>
+                    <option value="dev-002" ${AC.debugDeviceId==='dev-002'?'selected':''}>dev-002</option>
+                  </select>
+                  <i class="fas fa-chevron-down absolute right-[12px] top-1/2 -translate-y-1/2 text-[12px] text-[#999] pointer-events-none"></i>
+                </div>
               </div>
               <div>
                 <label class="block text-[14px] text-[#333] mb-[6px]">token</label>
-                <input type="text" value="${AC.debugToken}" placeholder="输入 token" class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none" data-debug-field="debugToken">
+                <div class="relative">
+                  <select class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none appearance-none bg-white" data-debug-field="debugToken">
+                    <option value="" ${AC.debugToken===''?'selected':''}>输入 token</option>
+                    <option value="token-a" ${AC.debugToken==='token-a'?'selected':''}>token-a</option>
+                    <option value="token-b" ${AC.debugToken==='token-b'?'selected':''}>token-b</option>
+                  </select>
+                  <i class="fas fa-chevron-down absolute right-[12px] top-1/2 -translate-y-1/2 text-[12px] text-[#999] pointer-events-none"></i>
+                </div>
               </div>
               <a href="javascript:void(0)" class="inline-block text-[13px] text-[#1473e6] hover:underline">请联系小家 IoT 平台获取设备信息</a>
             </div>
@@ -1823,7 +1836,15 @@ const wrap = openModal(html);
           <div class="space-y-[14px]">
             <div>
               <label class="block text-[14px] text-[#333] mb-[6px]">位置</label>
-              <input type="text" value="${AC.debugLocation}" placeholder="请输入位置" class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none" data-debug-field="debugLocation">
+              <div class="relative">
+                <select class="w-full h-[40px] px-[12px] border border-[#e5e5e5] rounded-[6px] text-[14px] text-[#333] outline-none appearance-none bg-white" data-debug-field="debugLocation">
+                  <option value="" ${AC.debugLocation===''?'selected':''}>请选择位置</option>
+                  <option value="客厅" ${AC.debugLocation==='客厅'?'selected':''}>客厅</option>
+                  <option value="卧室" ${AC.debugLocation==='卧室'?'selected':''}>卧室</option>
+                  <option value="厨房" ${AC.debugLocation==='厨房'?'selected':''}>厨房</option>
+                </select>
+                <i class="fas fa-chevron-down absolute right-[12px] top-1/2 -translate-y-1/2 text-[12px] text-[#999] pointer-events-none"></i>
+              </div>
             </div>
             <div>
               <label class="block text-[14px] text-[#333] mb-[6px]">语言</label>
@@ -1837,14 +1858,35 @@ const wrap = openModal(html);
             </div>
           </div>
         </div>`
+        : (AC.debugStarted ? `
+        <div class="flex-1 overflow-y-auto px-[16px] py-[16px] bg-[#fafafa]" data-debug-msglist="1">
+          ${AC.debugMessages.length ? AC.debugMessages.map(m=>m.role==='user'
+            ? `<div class="flex justify-end mb-[12px]"><div class="max-w-[75%] px-[12px] py-[8px] bg-[#1473e6] text-white text-[14px] rounded-[8px] break-all">${m.type==='voice'?'<i class="fas fa-microphone mr-[6px]"></i>':''}${m.text}</div></div>`
+            : `<div class="flex justify-start mb-[12px]"><div class="max-w-[75%] px-[12px] py-[8px] bg-white border border-[#f0f0f0] text-[#333] text-[14px] rounded-[8px] break-all">${m.text}</div></div>`
+          ).join('') : `<div class="h-full flex flex-col items-center justify-center"><i class="fas fa-robot text-[48px] text-[#d9d9d9] mb-[16px]"></i><div class="text-[14px] text-[#999]">和我对话试试吧</div></div>`}
+        </div>`
         : `
         <div class="flex-1 flex flex-col items-center justify-center bg-[#fafafa]">
-          <i class="fas fa-robot text-[48px] text-[#d9d9d9] mb-[16px]"></i>
+   <i class="fas fa-robot text-[48px] text-[#d9d9d9] mb-[16px]"></i>
           <div class="text-[14px] text-[#999]">和我对话试试吧</div>
-        </div>`}
+        </div>`)}
+        ${AC.debugStarted && !AC.debugSettingsOpen ? `
+        <div class="p-[12px] border-t border-[#f0f0f0]">
+          <div class="flex items-center gap-[10px]">
+            <div class="w-[36px] h-[36px] flex-shrink-0 flex items-center justify-center rounded-[6px] text-[#666] hover:text-[#1473e6] hover:bg-[#f5f5f5] cursor-pointer" data-debug-clear="1" title="清空所有调试数据">
+              <i class="fas fa-broom text-[16px]"></i>
+            </div>
+            <div class="flex-1 flex items-center h-[40px] px-[12px] border border-[#e5e5e5] rounded-[20px] bg-white">
+              <i class="fas fa-microphone text-[#999] mr-[8px] cursor-pointer hover:text-[#1473e6]" data-debug-voice="1" title="语音输入"></i>
+              <input type="text" value="${AC.debugInput}" placeholder="输入问题，按Enter发送" class="flex-1 text-[14px] text-[#333] outline-none bg-transparent" data-debug-input="1">
+              <i class="fas fa-paper-plane text-[#1473e6] ml-[8px] cursor-pointer" data-debug-send="1" title="发送"></i>
+            </div>
+          </div>
+        </div>`
+        : `
         <div class="p-[16px] border-t border-[#f0f0f0]">
-          <button class="w-full h-[40px] bg-[#1473e6] text-white text-[14px] rounded-[6px]">开始测试</button>
-        </div>
+          <button class="w-full h-[40px] bg-[#1473e6] text-white text-[14px] rounded-[6px]" data-debug-start="1">开始测试</button>
+        </div>`}
       </div>`;
     const content = `
       <div class="flex flex-col h-full">
@@ -2742,11 +2784,26 @@ function acSetScheduleBodyHtml(s){
       if(t.closest('[data-debug-toggle]')){ AC.debugCollapsed=!AC.debugCollapsed; renderApp(); return; }
       // 调试窗：设置面板开关（齿轮）
       if(t.closest('[data-debug-settings]')){ AC.debugSettingsOpen=!AC.debugSettingsOpen; renderApp(); return; }
+      // 调试窗：开始测试
+      if(t.closest('[data-debug-start]')){ AC.debugStarted=true; AC.debugSettingsOpen=false; renderApp(); return; }
+      // 调试窗：发送文字
+      if(t.closest('[data-debug-send]')){ acDebugSend('text'); return; }
+      // 调试窗：语音输入
+      if(t.closest('[data-debug-voice]')){ acDebugSend('voice'); return; }
+      // 调试窗：清空所有调试数据
+      if(t.closest('[data-debug-clear]')){ AC.debugMessages=[]; AC.debugInput=''; renderApp(); return; }
     };
     // 垫句输入同步（oninput 委托，避免监听器累积）
     app.oninput = function(e){
       const inp = e.target.closest('[data-ac-filler-idx]');
       if(inp){ const i=parseInt(inp.getAttribute('data-ac-filler-idx')); AC.fillerSentences[i]=inp.value; }
+ const dbg = e.target.closest('[data-debug-input]');
+      if(dbg){ AC.debugInput = dbg.value; }
+    };
+    // 调试窗：Enter 发送文字
+    app.onkeydown = function(e){
+      const dbg = e.target.closest('[data-debug-input]');
+      if(dbg && e.key==='Enter'){ e.preventDefault(); acDebugSend('text'); }
     };
     // 调试窗字段同步（onchange 委托，select 与文本输入用 change 避免重渲染丢焦点）
     app.onchange = function(e){
@@ -2754,6 +2811,23 @@ function acSetScheduleBodyHtml(s){
       if(fld){ const k=fld.getAttribute('data-debug-field'); AC[k]=fld.value; }
     };
   };
+
+  /* ---------- 调试窗：发送消息 ---------- */
+  function acDebugSend(type){
+    const text = (AC.debugInput||'').trim();
+    if(type==='text'){
+      if(!text) return;
+      AC.debugMessages.push({ role:'user', type:'text', text });
+    } else {
+      AC.debugMessages.push({ role:'user', type:'voice', text: text || '（语音输入）' });
+    }
+    AC.debugInput = '';
+    // 模拟一条回复
+ AC.debugMessages.push({ role:'assistant', type:'text', text:'已收到，正在处理…' });
+    renderApp();
+    const list = document.querySelector('[data-debug-msglist]');
+    if(list){ list.scrollTop = list.scrollHeight; }
+  }
   </script>
 
   <!-- ============ 初始化 ============ -->
