@@ -220,7 +220,7 @@
   function closeOverlay(el) { const w = el.closest('.fixed.inset-0'); if (w) w.remove(); }
 
   // 通用确认弹窗
-  function confirmModal({ title, content, hint, onConfirm }) {
+  function confirmModal({ title, content, hint, onConfirm, onCancel }) {
     const html = `
       <div class="w-[420px] bg-white rounded-[8px] shadow-xl overflow-hidden">
         <div class="px-[24px] pt-[24px] pb-[8px] flex items-start">
@@ -237,7 +237,7 @@
         </div>
       </div>`;
     const wrap = openModal(html, { zClass: 'z-[110]' });
-    wrap.querySelector('[data-cancel]').addEventListener('click', () => wrap.remove());
+    wrap.querySelector('[data-cancel]').addEventListener('click', () => { wrap.remove(); onCancel && onCancel(); });
     wrap.querySelector('[data-ok]').addEventListener('click', () => { wrap.remove(); onConfirm && onConfirm(); });
   }
 
@@ -1335,12 +1335,12 @@ const wrap = openModal(html);
         } else if(isAuto && hasSet){
           // 根据指令集生成且有指令集：填入示例，可编辑
           inner = `<div class="px-[16px] pb-[16px]">${toolBar}
-            <textarea ${isTool?'data-ac-tool-target':''} class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6]">${EXAMPLES[key]||''}</textarea>
+            <textarea ${isTool?'data-ac-tool-target':''} data-ac-prompt-ta="${key}" class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6]">${EXAMPLES[key]||''}</textarea>
           </div>`;
         } else {
           // 自定义提示词：为空可输入
           inner = `<div class="px-[16px] pb-[16px]">${toolBar}
-            <textarea ${isTool?'data-ac-tool-target':''} class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6]" placeholder="请输入提示词"></textarea>
+            <textarea ${isTool?'data-ac-tool-target':''} data-ac-prompt-ta="${key}" class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6]" placeholder="请输入提示词"></textarea>
           </div>`;
         }
       }
@@ -1374,7 +1374,7 @@ const wrap = openModal(html);
         </div>
         <div class="mt-[16px]">
           <div class="text-[14px] text-[#333] mb-[8px]">提示词</div>
-          <textarea class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6]">${EXAMPLES.planner||''}</textarea>
+          <textarea data-ac-prompt-ta="planner" class="w-full h-[120px] p-[10px] border border-[#d9d9d9] rounded-[6px] text-[13px] leading-[1.6]">${EXAMPLES.planner||''}</textarea>
         </div>
       </div>`:'';
     const plannerBox = `
@@ -2706,9 +2706,32 @@ function acSetScheduleBodyHtml(s){
       if(t.closest('[data-ac-mcp-add]')){ showToast('添加MCP服务'); return; }
       const mrm = t.closest('[data-ac-mcp-remove]');
       if(mrm){ const id=mrm.getAttribute('data-ac-mcp-remove'); AC.mcpServices=AC.mcpServices.filter(m=>m.id!==id); renderApp(); return; }
-      // AIoT 提示词单选
+      // AIoT 提示词模式切换（根据指令集生成 / 自定义提示词）
+      // 仅当当前模式下提示词有未保存编辑时，才二次确认——避免误丢失已编辑内容
       const prompt2 = t.closest('[data-ac-prompt]');
-      if(prompt2){ AC.promptType=prompt2.getAttribute('data-ac-prompt'); renderApp(); return; }
+      if(prompt2){
+        const target = prompt2.getAttribute('data-ac-prompt');
+        if(target === AC.promptType){ return; } // 点击当前模式，无变化
+        // 检测提示词编辑态：任一提示词框的实时值与其初始值不同，即视为有未保存编辑
+        const dirtyEdited = Array.prototype.some.call(
+          document.querySelectorAll('textarea[data-ac-prompt-ta]'),
+          ta => (ta.value||'').trim() !== (ta.defaultValue||'').trim()
+        );
+        const doSwitch = ()=>{ AC.promptType=target; AC.promptDirty=false; renderApp(); };
+        if(dirtyEdited){
+          // 简化文案：不区分切换方向
+          confirmModal({
+            title:'切换提示词模式',
+            content:'切换提示词生成模式后，当前已编辑内容将不会保存。是否确认切换？',
+            onConfirm: doSwitch,
+            // 取消：保持原模式且不丢失编辑内容，仅把单选按钮的视觉选中态还原到当前模式
+            onCancel: ()=>{ const r=document.querySelector('input[name="ac-prompt"][data-ac-prompt="'+AC.promptType+'"]'); if(r) r.checked=true; }
+          });
+        } else {
+          doSwitch();
+        }
+        return;
+      }
       // 指令集
       const setDelBtn = t.closest('[data-ac-set-del]');
       if(setDelBtn){ e.stopPropagation(); const id=setDelBtn.getAttribute('data-ac-set-del');
