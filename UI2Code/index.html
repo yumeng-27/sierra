@@ -1020,6 +1020,9 @@ const wrap = openModal(html);
     debugStarted: false,
     debugInput: '',
     debugMessages: [],
+    debugEventOpen: false,       // 是否展示端侧事件上报浮窗
+    debugEventType: '更新对话上下文',
+    debugEventPayload: '',      // 事件 payload（上行 JSON 文本）
     scheduleBySet: {
       'set-1': { create:true, cancel:false, query:false, once:true, cycle:false, grains:{ hour:false, day:false, week:false, month:false }, cmds:[{ name:'灯', code:'light', type:'控制项' }] }
     },
@@ -1860,29 +1863,14 @@ const wrap = openModal(html);
         </div>`
         : (AC.debugStarted ? `
         <div class="flex-1 overflow-y-auto px-[16px] py-[16px] bg-[#fafafa]" data-debug-msglist="1">
-          ${AC.debugMessages.length ? AC.debugMessages.map(m=>m.role==='user'
-            ? `<div class="flex justify-end mb-[12px]"><div class="max-w-[75%] px-[12px] py-[8px] bg-[#1473e6] text-white text-[14px] rounded-[8px] break-all">${m.type==='voice'?'<i class="fas fa-microphone mr-[6px]"></i>':''}${m.text}</div></div>`
-            : `<div class="flex justify-start mb-[12px]"><div class="max-w-[75%] px-[12px] py-[8px] bg-white border border-[#f0f0f0] text-[#333] text-[14px] rounded-[8px] break-all">${m.text}</div></div>`
-          ).join('') : `<div class="h-full flex flex-col items-center justify-center"><i class="fas fa-robot text-[48px] text-[#d9d9d9] mb-[16px]"></i><div class="text-[14px] text-[#999]">和我对话试试吧</div></div>`}
+          ${AC.debugMessages.length ? AC.debugMessages.map(m=>acDebugMsgHtml(m)).join('') : `<div class="h-full flex flex-col items-center justify-center"><i class="fas fa-robot text-[48px] text-[#d9d9d9] mb-[16px]"></i><div class="text-[14px] text-[#999]">和我对话试试吧</div></div>`}
         </div>`
         : `
         <div class="flex-1 flex flex-col items-center justify-center bg-[#fafafa]">
    <i class="fas fa-robot text-[48px] text-[#d9d9d9] mb-[16px]"></i>
           <div class="text-[14px] text-[#999]">和我对话试试吧</div>
         </div>`)}
-        ${AC.debugStarted && !AC.debugSettingsOpen ? `
-        <div class="p-[12px] border-t border-[#f0f0f0]">
-          <div class="flex items-center gap-[10px]">
-            <div class="w-[36px] h-[36px] flex-shrink-0 flex items-center justify-center rounded-[6px] text-[#666] hover:text-[#1473e6] hover:bg-[#f5f5f5] cursor-pointer" data-debug-clear="1" title="清空所有调试数据">
-              <i class="fas fa-broom text-[16px]"></i>
-            </div>
-            <div class="flex-1 flex items-center h-[40px] px-[12px] border border-[#e5e5e5] rounded-[20px] bg-white">
-              <i class="fas fa-microphone text-[#999] mr-[8px] cursor-pointer hover:text-[#1473e6]" data-debug-voice="1" title="语音输入"></i>
-              <input type="text" value="${AC.debugInput}" placeholder="输入问题，按Enter发送" class="flex-1 text-[14px] text-[#333] outline-none bg-transparent" data-debug-input="1">
-              <i class="fas fa-paper-plane text-[#1473e6] ml-[8px] cursor-pointer" data-debug-send="1" title="发送"></i>
-            </div>
-          </div>
-        </div>`
+        ${AC.debugStarted && !AC.debugSettingsOpen ? acDebugInputBarHtml()
         : `
         <div class="p-[16px] border-t border-[#f0f0f0]">
           <button class="w-full h-[40px] bg-[#1473e6] text-white text-[14px] rounded-[6px]" data-debug-start="1">开始测试</button>
@@ -1898,6 +1886,65 @@ const wrap = openModal(html);
       </div>`;
     return content;
   };
+
+  /* ---------- 调试窗：端侧事件模板 ---------- */
+  var DEBUG_EVENT_TEMPLATES = {
+    '设备上报': { status: '模式=睡眠模式，开关=开' },
+    '闹钟列表': {
+      alarms: [
+        {
+          id: 'a_01',
+          type: 'normal_alarm',
+          enabled: true,
+          time: { hour: 7, minute: 0 },
+          date: '2026-07-28',
+          repeat: { mode: 'weekly', weekdays: [1, 2, 3, 4, 5] },
+          end_date: '2026-08-01',
+          event_content: '交报告'
+        },
+        {
+          id: 'r_01',
+          type: 'interval_reminder',
+          enabled: true,
+          period_start: { hour: 9, minute: 0 },
+          period_end: { hour: 18, minute: 0 },
+          interval_minutes: 30,
+          event_content: '喝水'
+        }
+      ]
+    }
+  };
+
+  /* ---------- 调试窗：消息气泡渲染（query / 设备事件 / 执行链路 Trace） ---------- */
+  function acDebugMsgHtml(m){
+    const esc = (s)=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if(m.type==='event'){
+      return `<div class="flex justify-end mb-[12px]"><div class="max-w-[85%] rounded-[8px] overflow-hidden bg-[#0f172a] text-[#d1d5db]"><div class="px-[12px] py-[7px] text-[12px] text-[#7dd3fc] border-b border-[#1e293b]"><i class="fas fa-arrow-up mr-[6px]"></i>上行 JSON</div><pre class="px-[12px] py-[9px] text-[12px] font-mono leading-[1.6] whitespace-pre-wrap break-all">${esc(m.text)}</pre></div></div>`;
+    }
+    if(m.type==='event-response'){
+      const error = m.ok===false;
+      return `<div class="flex justify-start mb-[12px]"><div class="max-w-[85%] rounded-[8px] overflow-hidden bg-white border ${error?'border-[#ffccc7]':'border-[#b7eb8f]'}"><div class="px-[12px] py-[7px] text-[12px] ${error?'text-[#cf1322] bg-[#fff2f0]':'text-[#389e0d] bg-[#f6ffed]'} border-b ${error?'border-[#ffccc7]':'border-[#b7eb8f]'}"><i class="fas ${error?'fa-exclamation-circle':'fa-check-circle'} mr-[6px]"></i>接口返回</div><pre class="px-[12px] py-[9px] text-[12px] text-[#333] font-mono leading-[1.6] whitespace-pre-wrap break-all">${esc(m.text)}</pre></div></div>`;
+    }
+    if(m.role==='user'){
+      return `<div class="flex justify-end mb-[12px]"><div class="max-w-[75%] px-[12px] py-[8px] bg-[#1473e6] text-white text-[14px] rounded-[8px] break-all">${m.type==='voice'?'<i class="fas fa-microphone mr-[6px]"></i>':''}${esc(m.text)}</div></div>`;
+    }
+    return `<div class="flex justify-start mb-[12px]"><div class="max-w-[75%] px-[12px] py-[8px] bg-white border border-[#f0f0f0] text-[#333] text-[14px] rounded-[8px] break-all">${esc(m.text)}</div></div>`;
+  }
+
+  /* ---------- 调试窗：输入区与事件上报浮窗 ---------- */
+  function acDebugInputBarHtml(){
+    const chip = (t,label)=>`<span class="inline-block px-[10px] py-[4px] mr-[6px] text-[12px] border border-[#e5e6eb] rounded-[12px] bg-[#fafbfc] text-[#666] cursor-pointer hover:border-[#1473e6] hover:text-[#1473e6]" data-debug-evt-tpl="${t}">${label}</span>`;
+    const popup = AC.debugEventOpen ? `<div class="absolute left-[12px] right-[12px] bottom-[62px] z-20 bg-white border border-[#e5e5e5] rounded-[8px] shadow-xl overflow-hidden">
+      <div class="flex items-center justify-between px-[14px] py-[10px] border-b border-[#f0f0f0]"><div class="text-[14px] font-medium text-[#333]">事件上报</div><i class="fas fa-times text-[#999] cursor-pointer" data-debug-event-close="1"></i></div>
+      <div class="p-[14px] space-y-[12px] max-h-[380px] overflow-y-auto">
+        <div class="text-[12px] leading-[1.6] text-[#666]">用于模拟端侧设备向服务端上报事件<a href="#" class="ml-[4px] text-[#1473e6] hover:underline">帮助文档</a></div>
+        <div><label class="block text-[12px] text-[#666] mb-[5px]">事件类型</label><div class="relative"><select disabled class="w-full h-[36px] px-[10px] border border-[#e5e5e5] rounded-[6px] text-[13px] text-[#333] appearance-none bg-[#f7f7f7] cursor-not-allowed"><option>更新对话上下文</option></select><i class="fas fa-chevron-down absolute right-[10px] top-1/2 -translate-y-1/2 text-[11px] text-[#bbb] pointer-events-none"></i></div></div>
+        <div><label class="block text-[12px] text-[#666] mb-[5px]">常用模板</label><div>${chip('设备上报','设备状态上报')}${chip('闹钟列表','闹钟列表上报')}</div></div>
+        <div><label class="block text-[12px] text-[#666] mb-[5px]">事件 payload（上行 JSON）</label><textarea rows="7" class="w-full p-[10px] border border-[#e5e5e5] rounded-[6px] text-[12px] font-mono leading-[1.6] outline-none focus:border-[#1473e6]" placeholder="填写上行 JSON 或点击模板回填" data-debug-evt-payload="1">${AC.debugEventPayload}</textarea></div>
+        <div class="flex justify-end gap-[8px]"><button class="h-[36px] px-[16px] border border-[#e5e5e5] text-[13px] text-[#666] rounded-[6px]" data-debug-event-close="1">取消</button><button class="h-[36px] px-[16px] bg-[#1473e6] text-white text-[13px] rounded-[6px]" data-debug-evt-send="1">上报</button></div>
+      </div></div>` : '';
+    return `<div class="relative border-t border-[#f0f0f0] bg-white">${popup}<div class="p-[12px]"><div class="flex items-center gap-[10px]"><div class="w-[36px] h-[36px] flex-shrink-0 flex items-center justify-center rounded-[6px] text-[#666] hover:text-[#1473e6] hover:bg-[#f5f5f5] cursor-pointer" data-debug-clear="1" title="清空所有调试数据"><i class="fas fa-broom text-[16px]"></i></div><div class="flex-1 flex items-center h-[40px] px-[12px] border border-[#e5e5e5] rounded-[20px] bg-white"><i class="fas fa-microphone text-[#999] mr-[8px] cursor-pointer hover:text-[#1473e6]" data-debug-voice="1" title="语音输入"></i><input type="text" value="${AC.debugInput}" placeholder="输入问题，按Enter发送" class="flex-1 text-[14px] text-[#333] outline-none bg-transparent" data-debug-input="1"><i class="fas fa-satellite-dish text-[#999] mx-[8px] cursor-pointer hover:text-[#1473e6]" data-debug-event-open="1" title="模拟端侧事件上报"></i><i class="fas fa-paper-plane text-[#1473e6] cursor-pointer" data-debug-send="1" title="发送"></i></div></div></div></div>`;
+  }
 
   /* ================= 弹窗/抽屉 ================= */
   function acHotWordModal(){
@@ -2815,6 +2862,18 @@ function acSetScheduleBodyHtml(s){
       if(t.closest('[data-debug-voice]')){ acDebugSend('voice'); return; }
       // 调试窗：清空所有调试数据
       if(t.closest('[data-debug-clear]')){ AC.debugMessages=[]; AC.debugInput=''; renderApp(); return; }
+      // 调试窗：打开/关闭端侧事件上报浮窗
+      if(t.closest('[data-debug-event-open]')){
+        AC.debugEventOpen=true;
+        if(!(AC.debugEventPayload||'').trim()) acDebugFillEventTpl('设备上报');
+        renderApp(); return;
+      }
+      if(t.closest('[data-debug-event-close]')){ AC.debugEventOpen=false; renderApp(); return; }
+      // 调试窗：事件模板回填
+      const tplEl = t.closest('[data-debug-evt-tpl]');
+      if(tplEl){ acDebugFillEventTpl(tplEl.getAttribute('data-debug-evt-tpl')); renderApp(); return; }
+      // 调试窗：模拟端侧事件上报
+      if(t.closest('[data-debug-evt-send]')){ acDebugSendEvent(); return; }
     };
     // 垫句输入同步（oninput 委托，避免监听器累积）
     app.oninput = function(e){
@@ -2822,8 +2881,9 @@ function acSetScheduleBodyHtml(s){
       if(inp){ const i=parseInt(inp.getAttribute('data-ac-filler-idx')); AC.fillerSentences[i]=inp.value; }
  const dbg = e.target.closest('[data-debug-input]');
       if(dbg){ AC.debugInput = dbg.value; }
+      const evtPl = e.target.closest('[data-debug-evt-payload]');
+      if(evtPl){ AC.debugEventPayload = evtPl.value; }
     };
-    // 调试窗：Enter 发送文字
     app.onkeydown = function(e){
       const dbg = e.target.closest('[data-debug-input]');
       if(dbg && e.key==='Enter'){ e.preventDefault(); acDebugSend('text'); }
@@ -2832,6 +2892,8 @@ function acSetScheduleBodyHtml(s){
     app.onchange = function(e){
       const fld = e.target.closest('[data-debug-field]');
       if(fld){ const k=fld.getAttribute('data-debug-field'); AC[k]=fld.value; }
+      const evtType = e.target.closest('[data-debug-evt-type]');
+      if(evtType){ acDebugFillEventTpl(evtType.value); renderApp(); }
     };
   };
 
@@ -2847,6 +2909,31 @@ function acSetScheduleBodyHtml(s){
     AC.debugInput = '';
     // 模拟一条回复
  AC.debugMessages.push({ role:'assistant', type:'text', text:'已收到，正在处理…' });
+    renderApp();
+    const list = document.querySelector('[data-debug-msglist]');
+    if(list){ list.scrollTop = list.scrollHeight; }
+  }
+
+  /* ---------- 调试窗：端侧事件 —— 模板回填 ---------- */
+  function acDebugFillEventTpl(type){
+    const tpl = DEBUG_EVENT_TEMPLATES[type];
+    AC.debugEventPayload = tpl ? JSON.stringify(tpl, null, 2) : '';
+  }
+
+
+  /* ---------- 调试窗：端侧事件 —— 模拟上报 ---------- */
+  function acDebugSendEvent(){
+    const deviceId = (AC.debugDeviceId||'').trim();
+    const token = (AC.debugToken||'').trim();
+    const raw = (AC.debugEventPayload||'').trim();
+    if(!raw){ showToast('请先填写事件 payload'); return; }
+    AC.debugMessages.push({ role:'user', type:'event', text:raw });
+    if(!deviceId || !token){
+      AC.debugMessages.push({ role:'assistant', type:'event-response', ok:false, text:JSON.stringify({ code:40101, message:'device_id 或 token 缺失' }, null, 2) });
+    }else{
+      AC.debugMessages.push({ role:'assistant', type:'event-response', ok:true, text:JSON.stringify({ code:0, message:'success', data:{ event_type:'更新对话上下文', context_updated:true } }, null, 2) });
+    }
+    AC.debugEventOpen = false;
     renderApp();
     const list = document.querySelector('[data-debug-msglist]');
     if(list){ list.scrollTop = list.scrollHeight; }
