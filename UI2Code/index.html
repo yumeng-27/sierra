@@ -2346,8 +2346,13 @@ const wrap = openModal(html);
     function builtinHtml(){
       const rows = builtinItems.map(e=>`<tr class="border-t border-[#f0f0f0]"><td class="px-[12px] py-[8px] text-[13px]">${e.name}</td><td class="px-[12px] py-[8px] text-[13px] font-mono text-[#666]">${e.code}</td><td class="px-[12px] py-[8px] text-[18px]">${e.emoji}</td></tr>`).join('');
       return `
+        <div class="flex items-center mb-[8px]">
+          <span class="text-[14px] font-medium text-[#333]">情绪下发映射</span>
+          ${tipBox('情绪名称用于匹配模型识别出的情绪；下发标识 EMOTION 与表情 EMOTION_EMOJI 会随情绪事件下发给设备，支持设备按标识播放对应表情动画。')}
+          <span class="ml-auto text-[13px] text-[#1473e6] cursor-pointer" data-emo-preview><i class="far fa-file-code text-[12px] mr-[4px]"></i>查看下发报文</span>
+        </div>
         <table class="w-full border border-[#f0f0f0] rounded-[6px] overflow-hidden">
-          <thead class="bg-[#fafafa] text-[13px] text-[#666]"><tr><th class="px-[12px] py-[8px] text-left w-[120px]">情绪名称</th><th class="px-[12px] py-[8px] text-left">下发标识</th><th class="px-[12px] py-[8px] text-left w-[80px]">表情</th></tr></thead>
+          <thead class="bg-[#fafafa] text-[13px] text-[#666]"><tr><th class="px-[12px] py-[8px] text-left w-[120px]">情绪名称</th><th class="px-[12px] py-[8px] text-left">下发标识 EMOTION</th><th class="px-[12px] py-[8px] text-left w-[80px]">表情</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
     }
@@ -2487,7 +2492,8 @@ const wrap = openModal(html);
     }
 
     function previewModal(){
-      const it = draft.items.find(x=>x.name && x.code) || { name:'开心', code:'happy_1', emoji:'😊' };
+      const list = draft.mode==='builtin' ? builtinItems : draft.items;
+      const it = list.find(x=>x.name && x.code) || { name:'开心', code:'happy_1', emoji:'😊' };
       const args = it.emoji ? `"EMOTION": "${it.code}",\n          "EMOTION_EMOJI": "${it.emoji}"` : `"EMOTION": "${it.code}"`;
       const json = `{\n  "contentType": "EVENT",\n  "content": {\n    "eventType": "CALL_SKILL_EVENT",\n    "eventData": {\n      "msg": "表情情绪事件",\n      "data": {\n        "args": {\n          ${args}\n        }\n      },\n      "type": "CALL_SKILL_EVENT"\n    }\n  }\n}`;
       drawerModal(`
