@@ -2339,7 +2339,7 @@ const wrap = openModal(html);
         <div class="text-[15px] font-medium text-[#333] mb-[12px]">情绪定义</div>
         <div class="flex items-center gap-[32px] mb-[20px]">
           <label class="flex items-center cursor-pointer text-[14px] text-[#333]" data-emo-mode="builtin">${radio(draft.mode==='builtin')}系统内置，开箱即用</label>
-          <label class="flex items-center cursor-pointer text-[14px] text-[#333]" data-emo-mode="custom">${radio(draft.mode==='custom')}自定义情绪标签${tipBox('自定义模式下可自由编写情绪识别提示词，并自行维护情绪下发标识与表情映射。')}</label>
+          <label class="flex items-center cursor-pointer text-[14px] text-[#333]" data-emo-mode="custom">${radio(draft.mode==='custom')}自定义情绪标签${tipBox('自定义模式下可自由编写情绪识别提示词，并自行维护情绪标识与表情映射。')}</label>
         </div>`;
     }
 
@@ -2348,11 +2348,11 @@ const wrap = openModal(html);
       return `
         <div class="flex items-center mb-[8px]">
           <span class="text-[14px] font-medium text-[#333]">情绪下发映射</span>
-          ${tipBox('情绪名称用于匹配模型识别出的情绪；下发标识 EMOTION 与表情 EMOTION_EMOJI 会随情绪事件下发给设备，支持设备按标识播放对应表情动画。')}
+          ${tipBox('情绪名称用于匹配模型识别出的情绪；情绪标识与表情会随情绪事件下发给设备，支持设备按标识播放对应表情动画。')}
           <span class="ml-auto text-[13px] text-[#1473e6] cursor-pointer" data-emo-preview><i class="far fa-file-code text-[12px] mr-[4px]"></i>查看下发报文</span>
         </div>
         <table class="w-full border border-[#f0f0f0] rounded-[6px] overflow-hidden">
-          <thead class="bg-[#fafafa] text-[13px] text-[#666]"><tr><th class="px-[12px] py-[8px] text-left w-[120px]">情绪名称</th><th class="px-[12px] py-[8px] text-left">下发标识 EMOTION</th><th class="px-[12px] py-[8px] text-left w-[80px]">表情</th></tr></thead>
+          <thead class="bg-[#fafafa] text-[13px] text-[#666]"><tr><th class="px-[12px] py-[8px] text-left w-[120px]">情绪名称</th><th class="px-[12px] py-[8px] text-left">情绪标识</th><th class="px-[12px] py-[8px] text-left w-[80px]">表情</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>`;
     }
@@ -2386,13 +2386,13 @@ const wrap = openModal(html);
         <div>
           <div class="flex items-center mb-[8px]">
             <span class="text-[14px] font-medium text-[#333]">情绪下发映射</span>
-            ${tipBox('情绪名称用于匹配模型识别出的情绪；下发标识 EMOTION 与表情 EMOTION_EMOJI 会随情绪事件下发给设备，支持设备按标识播放对应表情动画。<br>提示词中规定的情绪名称，需与本表中的情绪名称一一对应，否则无法正确下发情绪标签和表情。')}
+            ${tipBox('情绪名称用于匹配模型识别出的情绪；情绪标识与表情会随情绪事件下发给设备，支持设备按标识播放对应表情动画。<br>提示词中规定的情绪名称，需与本表中的情绪名称一一对应，否则无法正确下发情绪标签和表情。')}
             <span class="ml-auto text-[13px] text-[#1473e6] cursor-pointer" data-emo-preview><i class="far fa-file-code text-[12px] mr-[4px]"></i>查看下发报文</span>
           </div>
           <table class="w-full border border-[#f0f0f0] rounded-[6px]">
             <thead class="bg-[#fafafa] text-[13px] text-[#666]"><tr>
               <th class="px-[12px] py-[8px] text-left w-[140px]">情绪名称</th>
-              <th class="px-[12px] py-[8px] text-left">下发标识 EMOTION</th>
+              <th class="px-[12px] py-[8px] text-left">情绪标识</th>
               <th class="px-[12px] py-[8px] text-center w-[80px]">表情</th>
               <th class="px-[12px] py-[8px] text-right w-[70px]">操作</th>
             </tr></thead>
@@ -2515,10 +2515,10 @@ const wrap = openModal(html);
         for(let i=0;i<draft.items.length;i++){
           const it=draft.items[i];
           const n=(it.name||'').trim(), c=(it.code||'').trim();
-          if(!n || !c){ showToast('第 '+(i+1)+' 行的情绪名称与下发标识不能为空'); return; }
+          if(!n || !c){ showToast('第 '+(i+1)+' 行的情绪名称与情绪标识不能为空'); return; }
           if(names[n]){ showToast('情绪名称重复：'+n); return; }
-          if(codes[c]){ showToast('下发标识重复：'+c); return; }
-          if(!/^[a-z][a-z0-9_]{0,31}$/.test(c)){ showToast('下发标识格式不合法：'+c+'（小写字母开头，仅含小写字母、数字、下划线）'); return; }
+          if(codes[c]){ showToast('情绪标识重复：'+c); return; }
+          if(!/^[a-z][a-z0-9_]{0,31}$/.test(c)){ showToast('情绪标识格式不合法：'+c+'（小写字母开头，仅含小写字母、数字、下划线）'); return; }
           names[n]=1; codes[c]=1; it.name=n; it.code=c;
         }
       }
